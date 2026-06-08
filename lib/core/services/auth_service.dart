@@ -1,6 +1,6 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 import '../constants/app_constants.dart';
+import 'encrypted_storage_service.dart';
 
 /// Resultado de un intento de inicio de sesión.
 class LoginResult {
@@ -24,36 +24,37 @@ class LoginResult {
 /// Servicio de autenticación.
 ///
 /// Actualmente usa credenciales mock (cualquier correo/contraseña válidos
-/// conceden acceso). Preparado para reemplazar [_validateCredentials] con
-/// una llamada real a backend sin tocar el resto de la app.
+/// conceden acceso). El token y timestamps se guardan con [EncryptedStorageService]
+/// (AES-256 + SharedPreferences), cumpliendo el requerimiento de almacén encriptado.
 class AuthService {
   AuthService._();
 
-  static const _storage = FlutterSecureStorage();
   static const _uuid = Uuid();
 
-  // -------------------------------------------------------------------------
   // Login / Logout
-  // -------------------------------------------------------------------------
 
   /// Intenta iniciar sesión con [email] y [password].
   ///
   /// Genera un token UUID mock y lo persiste junto con el timestamp de login
   /// en el almacén encriptado del dispositivo.
   static Future<LoginResult> login(String email, String password) async {
-    // Validación básica de formato
     if (!_validateCredentials(email, password)) {
       return LoginResult.failure('Credenciales inválidas.');
     }
 
-    // Generar token mock (en producción vendría del backend)
     final token = _uuid.v4();
     final loginTime = DateTime.now().toIso8601String();
 
-    // Persistir en almacén encriptado
-    await _storage.write(key: AppConstants.storageKeyToken, value: token);
-    await _storage.write(key: AppConstants.storageKeyLoginTime, value: loginTime);
-    await _storage.write(
+    // Persistir en almacén AES-256 encriptado
+    await EncryptedStorageService.write(
+      key: AppConstants.storageKeyToken,
+      value: token,
+    );
+    await EncryptedStorageService.write(
+      key: AppConstants.storageKeyLoginTime,
+      value: loginTime,
+    );
+    await EncryptedStorageService.write(
       key: AppConstants.storageKeyLastActivity,
       value: loginTime,
     );
@@ -63,25 +64,25 @@ class AuthService {
 
   /// Cierra la sesión del usuario y elimina los datos encriptados.
   static Future<void> logout() async {
-    await _storage.delete(key: AppConstants.storageKeyToken);
-    await _storage.delete(key: AppConstants.storageKeyLoginTime);
-    await _storage.delete(key: AppConstants.storageKeyLastActivity);
+    await EncryptedStorageService.delete(key: AppConstants.storageKeyToken);
+    await EncryptedStorageService.delete(key: AppConstants.storageKeyLoginTime);
+    await EncryptedStorageService.delete(
+        key: AppConstants.storageKeyLastActivity);
   }
 
   /// Verifica si existe una sesión activa guardada.
   static Future<bool> hasActiveSession() async {
-    final token = await _storage.read(key: AppConstants.storageKeyToken);
+    final token =
+        await EncryptedStorageService.read(key: AppConstants.storageKeyToken);
     return token != null && token.isNotEmpty;
   }
 
   /// Retorna el token de sesión almacenado, o null si no hay sesión.
   static Future<String?> getToken() async {
-    return _storage.read(key: AppConstants.storageKeyToken);
+    return EncryptedStorageService.read(key: AppConstants.storageKeyToken);
   }
 
-  // -------------------------------------------------------------------------
-  // Privado
-  // -------------------------------------------------------------------------
+  // ---> Privado
 
   /// Validación mock: acepta cualquier correo con '@' y contraseña >= 8 chars.
   /// Reemplazar con llamada a API cuando haya backend.

@@ -55,10 +55,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // -------------------------------------------------------------------------
   // Widgets internos
-  // -------------------------------------------------------------------------
-
   Widget _buildTopBar(BuildContext context, SessionProvider session) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),

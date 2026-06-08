@@ -3,28 +3,24 @@ import '../services/auth_service.dart';
 import '../services/session_service.dart';
 
 /// Estado global de la sesión del usuario.
-///
-/// Expone:
-/// - [isLoggedIn]: si hay sesión activa
-/// - [userEmail]: correo del usuario autenticado
-/// - [sessionToken]: token guardado en storage encriptado
-///
-/// La UI escucha cambios vía [ChangeNotifier] (Provider).
 class SessionProvider extends ChangeNotifier {
   bool _isLoggedIn = false;
   String _userEmail = '';
   String _sessionToken = '';
+  bool _isSessionWarning = false;
+  int _warningSecondsRemaining = 0;
 
   bool get isLoggedIn => _isLoggedIn;
   String get userEmail => _userEmail;
   String get sessionToken => _sessionToken;
 
-  // -------------------------------------------------------------------------
-  // Login
-  // -------------------------------------------------------------------------
+  /// True cuando la sesión está a punto de expirar (muestra advertencia en UI).
+  bool get isSessionWarning => _isSessionWarning;
 
-  /// Intenta autenticar al usuario. Si es exitoso, inicia el timer de
-  /// inactividad y notifica a los widgets que escuchan.
+  /// Segundos restantes mostrados en la advertencia.
+  int get warningSecondsRemaining => _warningSecondsRemaining;
+
+  // Login
   Future<String?> login(String email, String password) async {
     final result = await AuthService.login(email, password);
 
@@ -33,23 +29,19 @@ class SessionProvider extends ChangeNotifier {
       _userEmail = email;
       _sessionToken = result.token!;
 
-      // Iniciar monitoreo de inactividad
       SessionService.instance.start(
-        onExpired: () => _onSessionExpired(),
+        onExpired: _onSessionExpired, 
+        onWarning: _onSessionWarning,
       );
 
       notifyListeners();
-      return null; // null = sin error
+      return null;
     }
 
     return result.errorMessage;
   }
 
-  // -------------------------------------------------------------------------
-  // Logout
-  // -------------------------------------------------------------------------
 
-  /// Cierra sesión manualmente (botón de logout).
   Future<void> logout() async {
     SessionService.instance.stop();
     await AuthService.logout();
@@ -57,25 +49,37 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Registra actividad del usuario para reiniciar el timer de inactividad.
+  // Actividad
+
+  /// Registra un toque/interacción del usuario.
+  /// Reinicia el timer y oculta la advertencia si estaba visible.
   void registerActivity() {
     SessionService.instance.registerActivity();
+    if (_isSessionWarning) {
+      _isSessionWarning = false;
+      notifyListeners();
+    }
   }
 
-  // -------------------------------------------------------------------------
-  // Privado
-  // -------------------------------------------------------------------------
+  // Callbacks internos
 
-  /// Llamado automáticamente cuando el timer de inactividad expira.
+  void _onSessionWarning(int secondsRemaining) {
+    _isSessionWarning = true;
+    _warningSecondsRemaining = secondsRemaining;
+    notifyListeners();
+  }
+
   Future<void> _onSessionExpired() async {
     await AuthService.logout();
     _clearState();
-    notifyListeners(); // La UI reacciona y redirige al login
+    notifyListeners();
   }
 
   void _clearState() {
     _isLoggedIn = false;
     _userEmail = '';
     _sessionToken = '';
+    _isSessionWarning = false;
+    _warningSecondsRemaining = 0;
   }
 }
