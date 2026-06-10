@@ -9,11 +9,7 @@ import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Inicializar Firebase
   await Firebase.initializeApp();
-
-  // Inicializar notificaciones
   await NotificationService().initialize();
 
   runApp(
@@ -38,8 +34,6 @@ class AprendIAApp extends StatelessWidget {
   }
 }
 
-/// Raíz de la app: decide qué pantalla mostrar según el estado de sesión
-/// y gestiona el SnackBar de advertencia de inactividad.
 class _AppRoot extends StatefulWidget {
   const _AppRoot();
 
@@ -53,8 +47,6 @@ class _AppRootState extends State<_AppRoot> {
   @override
   void initState() {
     super.initState();
-    // Escuchar cambios del SessionProvider para reaccionar
-    // al estado de advertencia sin reconstruir todo el árbol.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<SessionProvider>().addListener(_onSessionChanged);
     });
@@ -76,6 +68,32 @@ class _AppRootState extends State<_AppRoot> {
     if (!session.isSessionWarning) {
       _warningSnackBar?.close();
       _warningSnackBar = null;
+    }
+
+    // Mostrar banner cuando el borrado remoto se ejecutó en foreground
+    if (!session.isLoggedIn && session.wasRemoteWiped) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.delete_forever, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Borrado remoto ejecutado. Todos los datos sensibles han sido eliminados.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFFB71C1C),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+        session.clearWipeFlag();
+      });
     }
   }
 
@@ -105,8 +123,6 @@ class _AppRootState extends State<_AppRoot> {
         ),
       ),
     );
-
-    // Limpiar la referencia cuando el SnackBar se cierre solo
     _warningSnackBar?.closed.then((_) => _warningSnackBar = null);
   }
 
@@ -126,8 +142,6 @@ class _AppRootState extends State<_AppRoot> {
   }
 }
 
-/// Detector transparente de actividad del usuario.
-/// Cualquier toque o arrastre reinicia el timer de inactividad.
 class _ActivityDetector extends StatelessWidget {
   final Widget child;
   final VoidCallback onActivity;

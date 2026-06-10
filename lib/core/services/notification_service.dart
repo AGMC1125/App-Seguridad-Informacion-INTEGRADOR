@@ -4,11 +4,28 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'sensitive_data_service.dart';
+
 /// Handler para mensajes recibidos con la app en BACKGROUND o TERMINADA.
 /// Debe ser una función de nivel superior (fuera de cualquier clase).
+///
+/// Si el mensaje es de tipo "remote_wipe" y el correo objetivo coincide
+/// con el almacenado en el dispositivo, se eliminan todos los datos sensibles.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('📩 Notificación en background: ${message.notification?.title}');
+  debugPrint('📩 Notificación en background: ${message.data}');
+
+  if (message.data['type'] == 'remote_wipe') {
+    final targetEmail = message.data['target_email'] ?? '';
+    final storedEmail = await SensitiveDataService.getStoredEmail();
+
+    if (storedEmail != null &&
+        storedEmail.isNotEmpty &&
+        storedEmail == targetEmail) {
+      await SensitiveDataService.wipeAll();
+      debugPrint('🗑️ Borrado remoto ejecutado (background) para: $targetEmail');
+    }
+  }
 }
 
 class NotificationService {
@@ -20,44 +37,47 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
 
-  /// Canal de notificaciones para Android
+  /// Canal de notificaciones para Android.
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'aprendia_channel', // id
-    'Notificaciones AprendIA', // nombre visible
+    'aprendia_channel',
+    'Notificaciones AprendIA',
     description: 'Canal principal de notificaciones de AprendIA',
     importance: Importance.high,
   );
 
+  /// Callback que se invoca cuando llega una orden de borrado remoto
+  /// con la app en FOREGROUND. Lo asigna [SessionProvider] al iniciar sesión.
+  static void Function(String targetEmail)? onRemoteWipe;
+
   /// Inicializa Firebase Messaging y notificaciones locales.
-  /// Llama esto desde main() después de Firebase.initializeApp().
+  /// Si el emulador no tiene Google Play Services disponible, la app
+  /// continúa funcionando sin FCM (solo sin notificaciones push).
   Future<void> initialize() async {
-    // Registrar handler de background
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    try {
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+      await _requestPermissions();
+      await _initLocalNotifications();
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
 
-    // Pedir permisos (necesario en iOS y Android 13+)
-    await _requestPermissions();
+      final initialMessage = await _messaging.getInitialMessage();
+      if (initialMessage != null) {
+        _handleNotificationTap(initialMessage);
+      }
 
-    // Configurar notificaciones locales
-    await _initLocalNotifications();
-
-    // Escuchar mensajes en FOREGROUND
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-    // Manejar tap en notificación cuando la app estaba en BACKGROUND
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
-
-    // Verificar si la app fue abierta desde una notificación (app TERMINADA)
-    final initialMessage = await _messaging.getInitialMessage();
-    if (initialMessage != null) {
-      _handleNotificationTap(initialMessage);
+      try {
+        final token = await _messaging.getToken();
+        debugPrint('🔑 FCM Token: $token');
+      } catch (e) {
+        // En emuladores sin Google Play Services el token no está disponible.
+        // La app funciona normalmente; FCM solo actúa en dispositivos reales.
+        debugPrint('⚠️ FCM token no disponible (emulador sin Play Services): $e');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error inicializando FCM, continuando sin notificaciones: $e');
     }
-
-    // Mostrar el FCM token en consola (útil para pruebas)
-    final token = await _messaging.getToken();
-    debugPrint('🔑 FCM Token: $token');
   }
 
-  /// Solicita permisos de notificación al usuario.
   Future<void> _requestPermissions() async {
     if (Platform.isIOS) {
       await _messaging.requestPermission(
@@ -66,18 +86,13 @@ class NotificationService {
         sound: true,
       );
     } else {
-      // Android 13+ — el permiso POST_NOTIFICATIONS se pide en runtime
       await _messaging.requestPermission();
     }
   }
 
-  /// Configura flutter_local_notifications para mostrar notificaciones
-  /// mientras la app está en foreground.
   Future<void> _initLocalNotifications() async {
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings();
-
     const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
@@ -87,20 +102,27 @@ class NotificationService {
       initSettings,
       onDidReceiveNotificationResponse: (details) {
         debugPrint('🔔 Tap en notificación local: ${details.payload}');
-        // Aquí puedes navegar a una pantalla específica según el payload
       },
     );
 
-    // Crear el canal en Android
     await _localNotifications
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_channel);
   }
 
-  /// Muestra una notificación local cuando el mensaje llega en FOREGROUND.
+  /// Maneja mensajes cuando la app está en FOREGROUND.
+  /// Si el tipo es "remote_wipe", invoca el callback de borrado en lugar
+  /// de mostrar una notificación visible.
   void _handleForegroundMessage(RemoteMessage message) {
-    debugPrint('📬 Mensaje en foreground: ${message.notification?.title}');
+    debugPrint('📬 Mensaje foreground: ${message.data}');
+
+    if (message.data['type'] == 'remote_wipe') {
+      final targetEmail = message.data['target_email'] ?? '';
+      debugPrint('🗑️ Orden de borrado remoto recibida para: $targetEmail');
+      onRemoteWipe?.call(targetEmail);
+      return;
+    }
 
     final notification = message.notification;
     if (notification == null) return;
@@ -124,21 +146,15 @@ class NotificationService {
     );
   }
 
-  /// Maneja el tap en una notificación (background / terminated).
   void _handleNotificationTap(RemoteMessage message) {
     debugPrint('👆 Usuario tocó notificación: ${message.notification?.title}');
-    // TODO: navega a la pantalla correspondiente usando el data del mensaje
-    // Ejemplo: navigatorKey.currentState?.pushNamed('/detalle');
   }
 
-  /// Devuelve el token FCM actual del dispositivo.
   Future<String?> getToken() => _messaging.getToken();
 
-  /// Suscribe al dispositivo a un topic (ej. "noticias", "alertas").
   Future<void> subscribeToTopic(String topic) =>
       _messaging.subscribeToTopic(topic);
 
-  /// Cancela la suscripción a un topic.
   Future<void> unsubscribeFromTopic(String topic) =>
       _messaging.unsubscribeFromTopic(topic);
 }

@@ -1,38 +1,46 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
+import '../services/sensitive_data_service.dart';
 import '../services/session_service.dart';
 
-/// Estado global de la sesión del usuario.
 class SessionProvider extends ChangeNotifier {
   bool _isLoggedIn = false;
   String _userEmail = '';
+  String _userName = '';
   String _sessionToken = '';
   bool _isSessionWarning = false;
   int _warningSecondsRemaining = 0;
 
+  // Estado de borrado remoto: true cuando se recibió una orden FCM de wipe
+  bool _wasRemoteWiped = false;
+
   bool get isLoggedIn => _isLoggedIn;
   String get userEmail => _userEmail;
+  String get userName => _userName;
   String get sessionToken => _sessionToken;
-
-  /// True cuando la sesión está a punto de expirar (muestra advertencia en UI).
   bool get isSessionWarning => _isSessionWarning;
-
-  /// Segundos restantes mostrados en la advertencia.
   int get warningSecondsRemaining => _warningSecondsRemaining;
+  bool get wasRemoteWiped => _wasRemoteWiped;
 
-  // Login
   Future<String?> login(String email, String password) async {
     final result = await AuthService.login(email, password);
 
     if (result.success) {
       _isLoggedIn = true;
       _userEmail = email;
+      _userName = result.userName!;
       _sessionToken = result.token!;
+      _wasRemoteWiped = false;
 
       SessionService.instance.start(
-        onExpired: _onSessionExpired, 
+        onExpired: _onSessionExpired,
         onWarning: _onSessionWarning,
       );
+
+      // Registrar el callback de borrado remoto en el servicio de notificaciones.
+      // Solo se ejecuta si la notificación llega con la app en foreground.
+      NotificationService.onRemoteWipe = _handleRemoteWipe;
 
       notifyListeners();
       return null;
@@ -41,18 +49,22 @@ class SessionProvider extends ChangeNotifier {
     return result.errorMessage;
   }
 
+  Future<String?> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    return AuthService.register(name: name, email: email, password: password);
+  }
 
   Future<void> logout() async {
     SessionService.instance.stop();
+    NotificationService.onRemoteWipe = null;
     await AuthService.logout();
     _clearState();
     notifyListeners();
   }
 
-  // Actividad
-
-  /// Registra un toque/interacción del usuario.
-  /// Reinicia el timer y oculta la advertencia si estaba visible.
   void registerActivity() {
     SessionService.instance.registerActivity();
     if (_isSessionWarning) {
@@ -61,7 +73,25 @@ class SessionProvider extends ChangeNotifier {
     }
   }
 
-  // Callbacks internos
+  void clearWipeFlag() {
+    _wasRemoteWiped = false;
+  }
+
+  // Ejecuta el borrado remoto cuando la app está en FOREGROUND.
+  // Verifica que el correo objetivo coincida con el usuario autenticado
+  // antes de borrar, garantizando que la notificación es para este usuario.
+  Future<void> _handleRemoteWipe(String targetEmail) async {
+    final storedEmail = await SensitiveDataService.getStoredEmail();
+    if (storedEmail == null || storedEmail != targetEmail) return;
+
+    SessionService.instance.stop();
+    NotificationService.onRemoteWipe = null;
+    await SensitiveDataService.wipeAll();
+
+    _wasRemoteWiped = true;
+    _clearState();
+    notifyListeners();
+  }
 
   void _onSessionWarning(int secondsRemaining) {
     _isSessionWarning = true;
@@ -70,6 +100,7 @@ class SessionProvider extends ChangeNotifier {
   }
 
   Future<void> _onSessionExpired() async {
+    NotificationService.onRemoteWipe = null;
     await AuthService.logout();
     _clearState();
     notifyListeners();
@@ -78,6 +109,7 @@ class SessionProvider extends ChangeNotifier {
   void _clearState() {
     _isLoggedIn = false;
     _userEmail = '';
+    _userName = '';
     _sessionToken = '';
     _isSessionWarning = false;
     _warningSecondsRemaining = 0;

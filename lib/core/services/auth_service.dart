@@ -1,92 +1,104 @@
-import 'package:uuid/uuid.dart';
 import '../constants/app_constants.dart';
+import 'api_client.dart';
 import 'encrypted_storage_service.dart';
+import 'notification_service.dart';
+import 'sensitive_data_service.dart';
 
-/// Resultado de un intento de inicio de sesión.
 class LoginResult {
   final bool success;
   final String? token;
+  final String? userName;
   final String? errorMessage;
 
   const LoginResult._({
     required this.success,
     this.token,
+    this.userName,
     this.errorMessage,
   });
 
-  factory LoginResult.success(String token) =>
-      LoginResult._(success: true, token: token);
+  factory LoginResult.success({required String token, required String userName}) =>
+      LoginResult._(success: true, token: token, userName: userName);
 
   factory LoginResult.failure(String message) =>
       LoginResult._(success: false, errorMessage: message);
 }
 
-/// Servicio de autenticación.
-///
-/// Actualmente usa credenciales mock (cualquier correo/contraseña válidos
-/// conceden acceso). El token y timestamps se guardan con [EncryptedStorageService]
-/// (AES-256 + SharedPreferences), cumpliendo el requerimiento de almacén encriptado.
 class AuthService {
   AuthService._();
 
-  static const _uuid = Uuid();
-
-  // Login / Logout
-
-  /// Intenta iniciar sesión con [email] y [password].
-  ///
-  /// Genera un token UUID mock y lo persiste junto con el timestamp de login
-  /// en el almacén encriptado del dispositivo.
   static Future<LoginResult> login(String email, String password) async {
-    if (!_validateCredentials(email, password)) {
-      return LoginResult.failure('Credenciales inválidas.');
+    try {
+      final data = await ApiClient.post('/auth/login', {
+        'email': email,
+        'password': password,
+      });
+
+      final token = data['access_token'] as String;
+      final userName = (data['user'] as Map<String, dynamic>)['name'] as String;
+      final loginTime = DateTime.now().toIso8601String();
+
+      // Guardar datos de sesión cifrados
+      await EncryptedStorageService.write(
+          key: AppConstants.storageKeyToken, value: token);
+      await EncryptedStorageService.write(
+          key: AppConstants.storageKeyLoginTime, value: loginTime);
+      await EncryptedStorageService.write(
+          key: AppConstants.storageKeyLastActivity, value: loginTime);
+
+      // Guardar los 4 campos sensibles cifrados con AES-256
+      String? fcmToken;
+      try {
+        fcmToken = await NotificationService().getToken();
+      } catch (_) {
+        // FCM no disponible en emuladores sin Google Play Services
+      }
+      await SensitiveDataService.populate(
+        email: email,
+        name: userName,
+        fcmToken: fcmToken,
+      );
+
+      return LoginResult.success(token: token, userName: userName);
+    } on ApiException catch (e) {
+      return LoginResult.failure(e.message);
     }
-
-    final token = _uuid.v4();
-    final loginTime = DateTime.now().toIso8601String();
-
-    // Persistir en almacén AES-256 encriptado
-    await EncryptedStorageService.write(
-      key: AppConstants.storageKeyToken,
-      value: token,
-    );
-    await EncryptedStorageService.write(
-      key: AppConstants.storageKeyLoginTime,
-      value: loginTime,
-    );
-    await EncryptedStorageService.write(
-      key: AppConstants.storageKeyLastActivity,
-      value: loginTime,
-    );
-
-    return LoginResult.success(token);
   }
 
-  /// Cierra la sesión del usuario y elimina los datos encriptados.
+  static Future<String?> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      await ApiClient.post('/auth/register', {
+        'name': name,
+        'email': email,
+        'password': password,
+      });
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    }
+  }
+
   static Future<void> logout() async {
     await EncryptedStorageService.delete(key: AppConstants.storageKeyToken);
     await EncryptedStorageService.delete(key: AppConstants.storageKeyLoginTime);
-    await EncryptedStorageService.delete(
-        key: AppConstants.storageKeyLastActivity);
+    await EncryptedStorageService.delete(key: AppConstants.storageKeyLastActivity);
+    await EncryptedStorageService.delete(key: AppConstants.storageKeySensitiveEmail);
+    await EncryptedStorageService.delete(key: AppConstants.storageKeySensitiveName);
+    await EncryptedStorageService.delete(key: AppConstants.storageKeySensitiveFcmToken);
+    await EncryptedStorageService.delete(key: AppConstants.storageKeySensitiveRegion);
   }
 
-  /// Verifica si existe una sesión activa guardada.
   static Future<bool> hasActiveSession() async {
     final token =
         await EncryptedStorageService.read(key: AppConstants.storageKeyToken);
     return token != null && token.isNotEmpty;
   }
 
-  /// Retorna el token de sesión almacenado, o null si no hay sesión.
   static Future<String?> getToken() async {
     return EncryptedStorageService.read(key: AppConstants.storageKeyToken);
-  }
-
-  // ---> Privado
-
-  /// Validación mock: acepta cualquier correo con '@' y contraseña >= 8 chars.
-  /// Reemplazar con llamada a API cuando haya backend.
-  static bool _validateCredentials(String email, String password) {
-    return email.contains('@') && password.length >= 8;
   }
 }

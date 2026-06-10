@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/session_provider.dart';
+import '../../../core/services/sensitive_data_service.dart';
 import '../../../theme/app_theme.dart';
 import '../widgets/lesson_card.dart';
 import '../widgets/progress_section.dart';
@@ -116,6 +117,16 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
+          // Botón datos sensibles
+          IconButton(
+            icon: const Icon(
+              Icons.shield_outlined,
+              color: AppColors.primary,
+              size: 22,
+            ),
+            onPressed: () => _showSensitiveDataSheet(context, session),
+            tooltip: 'Datos sensibles protegidos',
+          ),
           // Botón logout
           IconButton(
             icon: const Icon(
@@ -209,6 +220,116 @@ class HomeScreen extends StatelessWidget {
           lessonNumber: 4,
         ),
       ],
+    );
+  }
+
+  void _showSensitiveDataSheet(BuildContext context, SessionProvider session) {
+    final fields = SensitiveDataService.fieldDescriptions;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withAlpha(25),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.shield, color: AppColors.primary, size: 22),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Datos sensibles protegidos',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Cifrado AES-256 · Solo en este dispositivo',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Divider(),
+            const SizedBox(height: 4),
+            ...fields.map((f) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Text(f.icon, style: const TextStyle(fontSize: 20)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              f.key,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              f.classification,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: f.classification.contains('Ultra')
+                                    ? AppColors.error
+                                    : AppColors.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.lock, size: 16, color: AppColors.primary),
+                    ],
+                  ),
+                )),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3E0),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Color(0xFFE65100)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'El administrador puede eliminar estos datos remotamente enviando una notificación FCM con type: remote_wipe.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFFE65100)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
+        ),
+      ),
     );
   }
 

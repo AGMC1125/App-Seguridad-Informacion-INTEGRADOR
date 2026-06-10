@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/providers/session_provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/custom_text_field.dart';
 import '../../../widgets/custom_button.dart';
@@ -38,20 +40,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      // TODO: Conectar con backend/Firebase
-      await Future.delayed(const Duration(seconds: 2));
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Cuenta creada exitosamente!'),
-            backgroundColor: AppColors.success,
-          ),
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    final error = await context.read<SessionProvider>().register(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
         );
-        Navigator.pop(context); // Volver al login
-      }
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: AppColors.error),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Cuenta creada exitosamente!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.pop(context);
     }
   }
 
