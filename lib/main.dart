@@ -1,11 +1,21 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/providers/session_provider.dart';
+import 'core/services/notification_service.dart';
 import 'features/home/screens/home_screen.dart';
 import 'screens/security_check_screen.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Inicializar Firebase
+  await Firebase.initializeApp();
+
+  // Inicializar notificaciones
+  await NotificationService().initialize();
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => SessionProvider(),
