@@ -16,7 +16,7 @@ class AppConstants {
   //   Emulador Android  → http://10.0.2.2:8000
   //   Mismo WiFi        → http://TU_IP_LOCAL:8000  (ej. http://192.168.1.5:8000)
   //   Ngrok / internet  → https://xxxx.ngrok.io
-  static const apiBaseUrl = 'http://192.168.1.22:8000';
+  static const apiBaseUrl = 'http://192.168.1.75:8000';
 
   // --> Claves para almacén encriptado (datos de sesión)
 
