@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 
 /// Resultado de la verificación de seguridad del dispositivo.
@@ -22,6 +23,28 @@ class SecurityCheckResult {
 class SecurityService {
   // Constructor privado: esta clase no necesita instanciarse.
   SecurityService._();
+
+  /// Canal nativo hacia Kotlin para consultar ajustes del sistema que no
+  /// están expuestos por ningún plugin de Flutter (ej. ADB_ENABLED).
+  static const MethodChannel _securityChannel =
+      MethodChannel('com.aprendia.aprendia/security');
+
+  /// Consulta a la capa nativa de Android si la Depuración USB está activa,
+  /// leyendo `Settings.Global.ADB_ENABLED` desde [MainActivity].
+  ///
+  /// Retorna `false` ante cualquier error de plataforma (ej. ejecutando en
+  /// iOS, donde el canal no existe) para no bloquear el acceso por error.
+  static Future<bool> isUsbDebuggingEnabled() async {
+    try {
+      final bool enabled =
+          await _securityChannel.invokeMethod<bool>('isAdbEnabled') ?? false;
+      return enabled;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
 
   /// Verifica si el dispositivo tiene alguna amenaza de seguridad activa.
   ///

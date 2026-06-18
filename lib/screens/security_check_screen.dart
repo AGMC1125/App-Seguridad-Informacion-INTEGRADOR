@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemNavigator;
 import '../core/services/security_service.dart';
 import '../theme/app_theme.dart';
 import '../features/auth/screens/login_screen.dart';
@@ -22,6 +24,8 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
 
   bool _isChecking = true;
   bool _isDeviceSecure = true;
+  bool _isAdbEnabled = false;
+  bool _adbDialogShown = false;
   Timer? _periodicTimer;
 
   @override
@@ -54,16 +58,59 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
 
   Future<void> _runSecurityCheck() async {
     final result = await SecurityService.checkDeviceSecurity();
+
+    // La Depuración USB solo se restringe fuera del entorno de desarrollo:
+    // en kDebugMode el propio flujo de trabajo de Flutter depende de ADB.
+    bool adbEnabled = false;
+    if (!kDebugMode) {
+      adbEnabled = await SecurityService.isUsbDebuggingEnabled();
+    }
+
     if (!mounted) return;
     setState(() {
       _isChecking = false;
       _isDeviceSecure = result.isDeviceSecure;
+      _isAdbEnabled = adbEnabled;
     });
+  }
+
+  void _showAdbBlockDialog() {
+    if (_adbDialogShown) return;
+    _adbDialogShown = true;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          icon: const Icon(Icons.usb_off_rounded,
+              color: AppColors.error, size: 36),
+          title: const Text('Depuración USB detectada'),
+          content: const Text(
+            'Por políticas de seguridad, AprendIA no puede ejecutarse '
+            'mientras la Depuración USB esté activa en este dispositivo.\n\n'
+            'Ve a Ajustes > Opciones de desarrollador y desactiva '
+            '"Depuración USB", luego vuelve a abrir la aplicación.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => SystemNavigator.pop(),
+              child: const Text('Cerrar aplicación'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isChecking) return const _LoadingView();
+    if (_isAdbEnabled) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _showAdbBlockDialog());
+      return const _LoadingView();
+    }
     if (!_isDeviceSecure) {
       return const _BlockedView(
         icon: Icons.gps_off_rounded,
