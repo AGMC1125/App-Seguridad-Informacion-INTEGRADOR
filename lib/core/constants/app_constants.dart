@@ -16,7 +16,8 @@ class AppConstants {
   //   Emulador Android  → http://10.0.2.2:8000
   //   Mismo WiFi        → http://TU_IP_LOCAL:8000  (ej. http://192.168.1.5:8000)
   //   Ngrok / internet  → https://xxxx.ngrok.io
-  static const apiBaseUrl = 'http://192.168.1.75:8000';
+  // static const apiBaseUrl = 'http://192.168.1.75:8000';
+  static const apiBaseUrl = 'http://10.60.2.227:8000';
 
   // --> Claves para almacén encriptado (datos de sesión)
 
@@ -25,13 +26,12 @@ class AppConstants {
   static const storageKeyLoginTime = 'login_timestamp';
 
   // --> Claves para almacén encriptado (datos sensibles del usuario)
-  // Clasificación: Secreta/Ultra-confidencial según reporte C2-A1
 
   /// Correo electrónico del usuario autenticado.
   static const storageKeySensitiveEmail = 'sensitive_user_email';
 
   /// Nombre completo del usuario autenticado.
-  static const storageKeySensitiveName = 'sensitive_user_name';
+  static const storageKeySensitiveName = 'sensitive_user_name';   
 
   /// Token FCM del dispositivo (canal de notificaciones push y borrado remoto).
   static const storageKeySensitiveFcmToken = 'sensitive_fcm_token';

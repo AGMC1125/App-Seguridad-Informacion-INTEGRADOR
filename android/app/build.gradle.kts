@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android Gradle plugin.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
@@ -33,9 +34,31 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Signing con debug keys para pruebas de release local.
             signingConfig = signingConfigs.getByName("debug")
+
+            // ── R8: Ofuscación, Shrinking y Optimización ──────────────────
+            // isMinifyEnabled activa R8 (sucesor de ProGuard) que realiza:
+            //   1. Shrinking  → elimina clases/métodos no utilizados.
+            //   2. Obfuscation → renombra clases, métodos y variables.
+            //   3. Optimization → simplifica y optimiza el bytecode.
+            isMinifyEnabled = true
+
+            // Elimina recursos (imágenes, layouts, strings) no referenciados.
+            isShrinkResources = true
+
+            proguardFiles(
+                // Reglas base optimizadas de Android para producción.
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                // Reglas personalizadas del proyecto (Firebase, Flutter, etc.).
+                "proguard-rules.pro"
+            )
+        }
+
+        debug {
+            // En debug NO se activa R8 para facilitar el desarrollo.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

@@ -1,26 +1,37 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Primarios
-  static const Color primary = Color(0xFF4A6CF7);
-  static const Color primaryDark = Color(0xFF3A56D4);
-  static const Color primaryLight = Color(0xFFEEF1FE);
+  // Primarios (modo claro)
+  static const Color primary = Color(0xFF4F8EF7);
+  static const Color primaryDark = Color(0xFF2563EB);
+  static const Color primaryLight = Color(0xFFEEF3FF);
+
+  // Acento teal (identidad LSM)
+  static const Color accent = Color(0xFF06D6A0);
+  static const Color accentLight = Color(0xFFE6FAF5);
 
   // Secundarios
-  static const Color secondary = Color(0xFF00C9A7);
-  static const Color secondaryLight = Color(0xFFE6FAF7);
+  static const Color secondary = Color(0xFF06D6A0);
+  static const Color secondaryLight = Color(0xFFE6FAF5);
 
-  // Neutros
-  static const Color background = Color(0xFFF7F8FC);
+  // Neutros modo claro
+  static const Color background = Color(0xFFF0F4FF);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color textPrimary = Color(0xFF1A1D2E);
-  static const Color textSecondary = Color(0xFF6B7280);
+  static const Color textPrimary = Color(0xFF0F172A);
+  static const Color textSecondary = Color(0xFF64748B);
   static const Color textHint = Color(0xFFB0B7C3);
-  static const Color divider = Color(0xFFE5E7EB);
+  static const Color divider = Color(0xFFE2E8F0);
+
+  // Modo oscuro (login / register)
+  static const Color darkBg = Color(0xFF080E1A);
+  static const Color darkSurface = Color(0xFF0D1B3E);
+  static const Color darkText = Color(0xFFE2E8F0);
+  static const Color darkTextSecondary = Color(0xFF94A3B8);
 
   // Estado
   static const Color error = Color(0xFFEF4444);
   static const Color success = Color(0xFF10B981);
+  static const Color warning = Color(0xFFF59E0B);
 }
 
 class AppTheme {

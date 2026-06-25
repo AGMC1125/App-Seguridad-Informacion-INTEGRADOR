@@ -93,8 +93,9 @@ class SecurityService {
   /// La restricción aplica estrictamente en modo Release / Profile,
   /// simulando el entorno de producción.
   static Future<bool> _checkUsbDebugging() async {
-    // Excepción de desarrollo: no aplicar restricción en debug local.
-    if (kDebugMode) return false;
+    // Excepción de desarrollo: no aplicar restricción en debug ni profile local.
+    // kProfileMode se usa para análisis de rendimiento con DevTools.
+    if (kDebugMode || kProfileMode) return false;
 
     try {
       final bool isEnabled =
