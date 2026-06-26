@@ -34,7 +34,8 @@ class AuthService {
         'password': password,
       });
 
-      final token = data['access_token'] as String;
+      // Spring Boot devuelve accessToken (camelCase)
+      final token = data['accessToken'] as String;
       final userName = (data['user'] as Map<String, dynamic>)['name'] as String;
       final loginTime = DateTime.now().toIso8601String();
 
