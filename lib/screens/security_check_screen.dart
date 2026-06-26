@@ -1,7 +1,6 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemNavigator;
 import '../core/services/security_service.dart';
 import '../theme/app_theme.dart';
 import '../features/auth/screens/login_screen.dart';
@@ -11,6 +10,10 @@ import '../features/auth/screens/login_screen.dart';
 /// Monitorea continuamente mediante:
 /// - [WidgetsBindingObserver]: detecta cuando el usuario regresa a la app.
 /// - [Timer.periodic]: chequeo automático cada [_checkInterval] segundos.
+///
+/// Verificaciones RASP activas:
+///   1. Fake GPS / Mock Location
+///   2. USB Debugging activo (C2-A4) — solo en modo Release/Profile
 class SecurityCheckScreen extends StatefulWidget {
   const SecurityCheckScreen({super.key});
 
@@ -24,9 +27,11 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
 
   bool _isChecking = true;
   bool _isDeviceSecure = true;
-  bool _isAdbEnabled = false;
-  bool _adbDialogShown = false;
+  SecurityCheckResult? _lastResult;
   Timer? _periodicTimer;
+
+  // Control para no mostrar el diálogo de USB Debugging más de una vez.
+  bool _usbDialogShown = false;
 
   @override
   void initState() {
@@ -45,7 +50,9 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-verificar al volver a primer plano (el usuario pudo activar/desactivar ADB).
     if (state == AppLifecycleState.resumed) {
+      _usbDialogShown = false; // Permitir que el diálogo vuelva a mostrarse.
       _runSecurityCheck();
     }
   }
@@ -58,60 +65,114 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
 
   Future<void> _runSecurityCheck() async {
     final result = await SecurityService.checkDeviceSecurity();
-
-    // La Depuración USB solo se restringe fuera del entorno de desarrollo:
-    // en kDebugMode el propio flujo de trabajo de Flutter depende de ADB.
-    bool adbEnabled = false;
-    if (!kDebugMode) {
-      adbEnabled = await SecurityService.isUsbDebuggingEnabled();
-    }
-
     if (!mounted) return;
+
     setState(() {
       _isChecking = false;
       _isDeviceSecure = result.isDeviceSecure;
-      _isAdbEnabled = adbEnabled;
+      _lastResult = result;
     });
+
+    // Mostrar el diálogo de bloqueo por USB Debugging si aplica.
+    // Se hace en un postFrameCallback para garantizar que el árbol
+    // de widgets ya esté montado antes de llamar a showDialog.
+    if (!result.isDeviceSecure && result.isUsbDebuggingEnabled && !_usbDialogShown) {
+      _usbDialogShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showUsbDebuggingBlockedDialog();
+      });
+    }
   }
 
-  void _showAdbBlockDialog() {
-    if (_adbDialogShown) return;
-    _adbDialogShown = true;
+  /// Muestra un [AlertDialog] persistente y no descartable que informa al
+  /// usuario del bloqueo por política de seguridad RASP.
+  ///
+  /// - [barrierDismissible: false] → no se cierra al tocar fuera.
+  /// - El único botón cierra la aplicación completamente de forma limpia.
+  void _showUsbDebuggingBlockedDialog() {
     showDialog<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          icon: const Icon(Icons.usb_off_rounded,
-              color: AppColors.error, size: 36),
-          title: const Text('Depuración USB detectada'),
-          content: const Text(
-            'Por políticas de seguridad, AprendIA no puede ejecutarse '
-            'mientras la Depuración USB esté activa en este dispositivo.\n\n'
-            'Ve a Ajustes > Opciones de desarrollador y desactiva '
-            '"Depuración USB", luego vuelve a abrir la aplicación.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => SystemNavigator.pop(),
-              child: const Text('Cerrar aplicación'),
+      barrierDismissible: false, // No descartable: el usuario NO puede ignorarlo.
+      builder: (BuildContext dialogContext) {
+        return PopScope(
+          // Previene que el botón físico "Atrás" cierre el diálogo.
+          canPop: false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-          ],
-        ),
-      ),
+            icon: const Icon(
+              Icons.usb_off_rounded,
+              color: AppColors.error,
+              size: 48,
+            ),
+            title: const Text(
+              'Entorno Inseguro Detectado',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.error,
+                fontSize: 18,
+              ),
+            ),
+            content: const Text(
+              'La Depuración USB (USB Debugging) está activa en este dispositivo.\n\n'
+              'Por políticas de seguridad de AprendIA, la aplicación no puede '
+              'ejecutarse en un entorno de depuración activo, ya que permite '
+              'el acceso no autorizado a la memoria y los datos de la aplicación.\n\n'
+              'Para continuar, desactiva la Depuración USB en:\n'
+              'Ajustes → Opciones de desarrollador → Depuración USB.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, height: 1.5),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.close_rounded),
+                label: const Text(
+                  'Entendido — Cerrar aplicación',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                onPressed: () {
+                  // Cerrar la aplicación de forma limpia.
+                  exit(0);
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isChecking) return const _LoadingView();
-    if (_isAdbEnabled) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _showAdbBlockDialog());
-      return const _LoadingView();
+
+    // Si USB Debugging está activo, mostramos el Login bloqueado detrás del diálogo
+    // (el diálogo es modal y cubre todo — el usuario solo puede cerrar la app).
+    if (_lastResult != null && _lastResult!.isUsbDebuggingEnabled) {
+      return const _BlockedView(
+        icon: Icons.usb_off_rounded,
+        title: 'Depuración USB Activa',
+        message:
+            'La Depuración USB está activa en este dispositivo.\n\n'
+            'Por políticas de seguridad, AprendIA no puede ejecutarse '
+            'en un entorno de depuración activo.\n\n'
+            'Desactiva la Depuración USB en Ajustes → Opciones de desarrollador.',
+      );
     }
-    if (!_isDeviceSecure) {
+
+    if (_lastResult != null && _lastResult!.isMockLocationActive) {
       return const _BlockedView(
         icon: Icons.gps_off_rounded,
         title: 'Ubicación simulada detectada',
@@ -122,6 +183,7 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
             'Desactiva el Fake GPS e intenta de nuevo.',
       );
     }
+
     return const LoginScreen();
   }
 }

@@ -36,8 +36,9 @@ class ApiClient {
         return data as Map<String, dynamic>;
       }
 
+      // Spring Boot devuelve {status, message, timestamp}
       final detail = data is Map
-          ? (data['detail'] ?? 'Error desconocido')
+          ? (data['message'] ?? data['detail'] ?? 'Error desconocido')
           : 'Error desconocido';
       throw ApiException(detail.toString(), statusCode: response.statusCode);
     } on ApiException {

@@ -8,7 +8,10 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val securityChannelName = "com.aprendia.aprendia/security"
+
+    // Canal de comunicación Dart ↔ Kotlin para verificaciones RASP.
+    // El nombre debe coincidir exactamente con el usado en Dart.
+    private val SECURITY_CHANNEL = "com.aprendia.aprendia/security"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -19,19 +22,26 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, securityChannelName)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "isAdbEnabled" -> {
-                        val adbEnabled = Settings.Global.getInt(
-                            contentResolver,
-                            Settings.Global.ADB_ENABLED,
-                            0
-                        ) == 1
-                        result.success(adbEnabled)
-                    }
-                    else -> result.notImplemented()
+
+        // Registrar el MethodChannel para que Dart pueda consultar el estado
+        // de Settings.Global.ADB_ENABLED directamente desde la API nativa.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SECURITY_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isUsbDebuggingEnabled" -> {
+                    // Settings.Global.ADB_ENABLED == 1 cuando USB Debugging
+                    // está activo en Ajustes de desarrollador del dispositivo.
+                    val adbEnabled = Settings.Global.getInt(
+                        contentResolver,
+                        Settings.Global.ADB_ENABLED,
+                        0  // valor por defecto: desactivado
+                    )
+                    result.success(adbEnabled == 1)
                 }
+                else -> result.notImplemented()
             }
+        }
     }
 }
