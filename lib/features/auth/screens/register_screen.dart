@@ -1,8 +1,10 @@
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/session_provider.dart';
 import '../../../theme/app_theme.dart';
+import 'privacy_policy_screen.dart';
 
 // ─── Particle painter (reutilizado del login) ─────────────────────────────────
 
@@ -71,6 +73,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
   bool _acceptTerms = false;
+  late final TapGestureRecognizer _privacyTapRecognizer;
 
   // ── Estado de visibilidad de contraseñas ─────────────────────────────────
   bool _obscurePassword = true;
@@ -83,6 +86,15 @@ class _RegisterScreenState extends State<RegisterScreen>
   @override
   void initState() {
     super.initState();
+
+    _privacyTapRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => const PrivacyPolicyScreen()),
+        );
+      };
 
     _particleCtrl = AnimationController(
       vsync: this,
@@ -104,6 +116,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   @override
   void dispose() {
+    _privacyTapRecognizer.dispose();
     _particleCtrl.dispose();
     _nameController.dispose();
     _emailController.dispose();
@@ -523,10 +536,13 @@ class _RegisterScreenState extends State<RegisterScreen>
                 TextSpan(text: ' y la '),
                 TextSpan(
                   text: 'Política de privacidad',
-                  style: TextStyle(
+                  recognizer: _privacyTapRecognizer,
+                  style: const TextStyle(
                     color: Color(0xFF4F8EF7),
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
+                    decoration: TextDecoration.underline,
+                    decorationColor: Color(0xFF4F8EF7),
                   ),
                 ),
               ],

@@ -304,16 +304,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primary, AppColors.primaryDark],
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.sign_language, color: Colors.white, size: 20),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset('assets/images/logo-app.png', width: 36, height: 36, fit: BoxFit.cover),
           ),
           const SizedBox(width: 10),
           const Text(
