@@ -10,13 +10,8 @@ class AppConstants {
   /// Tiempo antes del cierre en el que se muestra la advertencia al usuario.
   static const sessionWarningBefore = Duration(seconds: 30);
 
-  // API – Spring Boot (lsm-api, puerto 8080)
-  // IMPORTANTE: Cambia esta URL antes de compilar para dispositivo físico.
-  // Opciones:
-  //   Emulador Android  → http://10.0.2.2:8080
-  //   Mismo WiFi        → http://TU_IP_LOCAL:8080  (ej. http://192.168.1.5:8080)
-  //   Ngrok / internet  → https://xxxx.ngrok.io
-  static const apiBaseUrl = 'http://10.60.118.227:8080';
+  // API – Spring Boot desplegada en producción
+  static const apiBaseUrl = 'https://aprendia.angeldev.fun';
 
   // --> Claves para almacén encriptado (datos de sesión)
 

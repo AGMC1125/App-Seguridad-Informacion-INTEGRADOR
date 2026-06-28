@@ -79,6 +79,12 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
+  // ── Focus nodes para navegación con teclado ──────────────────────────────
+  final _nameFocus    = FocusNode();
+  final _emailFocus   = FocusNode();
+  final _passFocus    = FocusNode();
+  final _confirmFocus = FocusNode();
+
   // ── Animaciones ──────────────────────────────────────────────────────────
   late final AnimationController _particleCtrl;
   late final List<_Particle> _particles;
@@ -122,6 +128,10 @@ class _RegisterScreenState extends State<RegisterScreen>
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _nameFocus.dispose();
+    _emailFocus.dispose();
+    _passFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
@@ -365,6 +375,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               hint: 'Ej. Juan Pérez',
               icon: Icons.person_outline,
               controller: _nameController,
+              focusNode: _nameFocus,
+              nextFocusNode: _emailFocus,
+              textInputAction: TextInputAction.next,
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Por favor ingresa tu nombre';
@@ -383,6 +396,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               hint: 'ejemplo@correo.com',
               icon: Icons.email_outlined,
               controller: _emailController,
+              focusNode: _emailFocus,
+              nextFocusNode: _passFocus,
+              textInputAction: TextInputAction.next,
               keyboardType: TextInputType.emailAddress,
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -403,6 +419,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               hint: 'Mínimo 8 caracteres',
               icon: Icons.lock_outline,
               controller: _passwordController,
+              focusNode: _passFocus,
+              nextFocusNode: _confirmFocus,
+              textInputAction: TextInputAction.next,
               isPassword: true,
               obscureValue: _obscurePassword,
               onToggleObscure: () =>
@@ -425,6 +444,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               hint: 'Repite tu contraseña',
               icon: Icons.lock_outline,
               controller: _confirmPasswordController,
+              focusNode: _confirmFocus,
+              textInputAction: TextInputAction.done,
+              onSubmitted: _onRegister,
               isPassword: true,
               obscureValue: _obscureConfirm,
               onToggleObscure: () =>
@@ -524,8 +546,8 @@ class _RegisterScreenState extends State<RegisterScreen>
               text: 'Acepto los ',
               style: TextStyle(
                   color: Colors.white.withOpacity(0.45), fontSize: 13),
-              children: const [
-                TextSpan(
+              children: [
+                const TextSpan(
                   text: 'Términos y condiciones',
                   style: TextStyle(
                     color: Color(0xFF4F8EF7),
@@ -533,7 +555,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                     fontSize: 13,
                   ),
                 ),
-                TextSpan(text: ' y la '),
+                const TextSpan(text: ' y la '),
                 TextSpan(
                   text: 'Política de privacidad',
                   recognizer: _privacyTapRecognizer,
@@ -565,6 +587,10 @@ class _RegisterScreenState extends State<RegisterScreen>
     VoidCallback? onToggleObscure,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
+    FocusNode? focusNode,
+    FocusNode? nextFocusNode,
+    TextInputAction textInputAction = TextInputAction.next,
+    VoidCallback? onSubmitted,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -580,9 +606,18 @@ class _RegisterScreenState extends State<RegisterScreen>
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          focusNode: focusNode,
           keyboardType: keyboardType,
+          textInputAction: textInputAction,
           obscureText: isPassword ? obscureValue : false,
           validator: validator,
+          onFieldSubmitted: (_) {
+            if (nextFocusNode != null) {
+              FocusScope.of(context).requestFocus(nextFocusNode);
+            } else {
+              onSubmitted?.call();
+            }
+          },
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
             hintText: hint,

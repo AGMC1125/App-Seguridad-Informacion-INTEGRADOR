@@ -5,6 +5,7 @@ import '../../../core/providers/session_provider.dart';
 import '../../../core/services/sensitive_data_service.dart';
 import '../../../core/services/signs_service.dart';
 import '../../../core/services/api_client.dart';
+import '../../../core/services/search_service.dart';
 import '../models/sign_result.dart';
 import '../../../theme/app_theme.dart';
 
@@ -14,14 +15,14 @@ import '../../../theme/app_theme.dart';
 
 class _AvatarOption {
   final String id;
-  final String emoji;
+  final IconData icon;
   final String label;
   final String description;
   final Color color;
 
   const _AvatarOption({
     required this.id,
-    required this.emoji,
+    required this.icon,
     required this.label,
     required this.description,
     required this.color,
@@ -61,33 +62,37 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentVideoIndex = 0;
   bool _videoLoading = false;
 
+  // ---- Sugerencias de búsqueda semántica ----
+  List<SignSuggestion> _suggestions = [];
+  bool _loadingSuggestions = false;
+
   // ---- Avatares disponibles ----
   // IMPORTANTE: los IDs coinciden con los AvatarType del API Spring Boot
   static const List<_AvatarOption> _avatars = [
     _AvatarOption(
       id: 'nino',
-      emoji: '👦',
+      icon: Icons.boy_rounded,
       label: 'Niño',
       description: 'Avatar infantil masculino',
       color: Color(0xFF2563EB),
     ),
     _AvatarOption(
       id: 'nina',
-      emoji: '👧',
+      icon: Icons.girl_rounded,
       label: 'Niña',
       description: 'Avatar infantil femenino',
       color: Color(0xFFDB2777),
     ),
     _AvatarOption(
       id: 'hombre_adulto',
-      emoji: '👨',
+      icon: Icons.man_rounded,
       label: 'Hombre adulto',
       description: 'Avatar adulto masculino',
       color: Color(0xFF059669),
     ),
     _AvatarOption(
       id: 'mujer_adulta',
-      emoji: '👩',
+      icon: Icons.woman_rounded,
       label: 'Mujer adulta',
       description: 'Avatar adulto femenino',
       color: Color(0xFF7C3AED),
@@ -171,6 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _isGenerating = true;
       _errorMessage = null;
       _result = null;
+      _suggestions = [];
     });
 
     await _disposeVideoController();
@@ -222,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final session = context.watch<SessionProvider>();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -233,35 +239,34 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 24),
-                    _buildWelcomeHeader(session.userEmail),
                     const SizedBox(height: 20),
-                    _buildInfoBanner(),
-                    const SizedBox(height: 28),
+                    _buildWelcomeBanner(context, session.userName, session.userEmail),
+                    const SizedBox(height: 22),
 
                     // ---- Paso 1: Avatar ----
-                    _buildStepLabel('1', 'Selecciona un avatar'),
+                    _buildStepLabel(context, '1', 'Selecciona un avatar'),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       'El avatar representará las señas en la animación generada',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      style: TextStyle(fontSize: 12, color: context.textSecondary),
                     ),
                     const SizedBox(height: 14),
-                    _buildAvatarGrid(),
-                    const SizedBox(height: 28),
+                    _buildAvatarGrid(context),
+                    const SizedBox(height: 26),
 
                     // ---- Paso 2: Texto ----
-                    _buildStepLabel('2', 'Escribe el texto'),
+                    _buildStepLabel(context, '2', 'Escribe el texto'),
                     const SizedBox(height: 4),
-                    const Text(
-                      'El texto será deletreado letra a letra en Lengua de Señas Mexicana (LSM)',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    Text(
+                      'El texto será deletreado letra a letra en LSM',
+                      style: TextStyle(fontSize: 12, color: context.textSecondary),
                     ),
                     const SizedBox(height: 14),
-                    _buildTextInput(),
-                    const SizedBox(height: 8),
-                    _buildExampleChips(),
-                    const SizedBox(height: 24),
+                    _buildTextInput(context),
+                    const SizedBox(height: 10),
+                    _buildSuggestions(context),
+                    _buildExampleChips(context),
+                    const SizedBox(height: 22),
 
                     // ---- Error ----
                     if (_errorMessage != null) ...[
@@ -270,14 +275,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
 
                     // ---- Botón generar ----
-                    _buildGenerateButton(),
+                    _buildGenerateButton(context),
 
                     // ---- Paso 3: Resultado ----
                     if (_result != null) ...[
                       const SizedBox(height: 32),
-                      _buildStepLabel('3', 'Reproducción de señas'),
+                      _buildStepLabel(context, '3', 'Reproducción de señas'),
                       const SizedBox(height: 14),
-                      _buildResultCard(),
+                      _buildResultCard(context),
                     ],
 
                     const SizedBox(height: 36),
@@ -296,37 +301,78 @@ class _HomeScreenState extends State<HomeScreen> {
   // ---------------------------------------------------------------------------
 
   Widget _buildTopBar(BuildContext context, SessionProvider session) {
+    final userInitial = session.userName.isNotEmpty
+        ? session.userName[0].toUpperCase()
+        : (session.userEmail.isNotEmpty ? session.userEmail[0].toUpperCase() : 'U');
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.divider, width: 1)),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(context.isDark ? 0.4 : 0.07),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         children: [
+          // Logo + nombre
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: Image.asset('assets/images/logo-app.png', width: 36, height: 36, fit: BoxFit.cover),
+            child: Image.asset('assets/images/logo-app.png', width: 34, height: 34, fit: BoxFit.cover),
           ),
           const SizedBox(width: 10),
-          const Text(
-            'AprendIA',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'VirtualSign LSM',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+              Text(
+                'Lengua de Señas Mexicana',
+                style: TextStyle(fontSize: 9.5, color: context.textSecondary, letterSpacing: 0.2),
+              ),
+            ],
           ),
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.shield_outlined, color: AppColors.primary, size: 22),
-            onPressed: () => _showSensitiveDataSheet(context, session),
-            tooltip: 'Datos sensibles protegidos',
+          // Avatar de iniciales del usuario
+          Container(
+            width: 32,
+            height: 32,
+            margin: const EdgeInsets.only(right: 4),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(colors: [AppColors.primary, AppColors.accent]),
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                userInitial,
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout_rounded, color: AppColors.textSecondary, size: 22),
+            icon: const Icon(Icons.shield_outlined, color: AppColors.primary, size: 20),
+            onPressed: () => _showSensitiveDataSheet(context, session),
+            tooltip: 'Datos sensibles protegidos',
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          IconButton(
+            icon: Icon(Icons.logout_rounded, color: context.textSecondary, size: 20),
             onPressed: () => _confirmLogout(context, session),
             tooltip: 'Cerrar sesión',
+            padding: const EdgeInsets.all(6),
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
           ),
         ],
       ),
@@ -334,54 +380,112 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Encabezado de bienvenida
+  // Banner de bienvenida
   // ---------------------------------------------------------------------------
 
-  Widget _buildWelcomeHeader(String email) {
-    final name = email.split('@').first;
-    final displayName = name[0].toUpperCase() + name.substring(1);
+  Widget _buildWelcomeBanner(BuildContext context, String userName, String email) {
+    // Prioridad: nombre real del API → parte local del email → fallback
+    final displayName = userName.isNotEmpty
+        ? userName
+        : (email.split('@').first.isNotEmpty
+            ? email.split('@').first[0].toUpperCase() + email.split('@').first.substring(1)
+            : 'Usuario');
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '¡Hola, $displayName! 👋',
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: context.isDark
+              ? [AppColors.darkPrimaryContainer, AppColors.darkSurfaceVariant]
+              : [AppColors.lightPrimaryContainer.withOpacity(0.6), AppColors.lightBackground],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.primary.withOpacity(context.isDark ? 0.25 : 0.15),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '¡Hola, $displayName!',
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.waving_hand_rounded, color: AppColors.primary, size: 20),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Genera señas en LSM letra por letra',
+                  style: TextStyle(fontSize: 13, color: context.textSecondary),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _buildMiniChip(context, Icons.check_circle_rounded, 'LSM', AppColors.accent),
+                    const SizedBox(width: 8),
+                    _buildMiniChip(context, Icons.smart_display_rounded, '4 Avatares', AppColors.primary),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Genera instrucciones en Lengua de Señas Mexicana',
-          style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-        ),
-      ],
+          const SizedBox(width: 12),
+          // Ícono decorativo
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.primary, AppColors.accent],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withOpacity(0.35),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.sign_language_rounded, color: Colors.white, size: 28),
+          ),
+        ],
+      ),
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Banner informativo
-  // ---------------------------------------------------------------------------
-
-  Widget _buildInfoBanner() {
+  Widget _buildMiniChip(BuildContext context, IconData icon, String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.primaryLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.28)),
       ),
-      child: const Row(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Selecciona un avatar, escribe el texto y obtén los videos LSM letra por letra.',
-              style: TextStyle(fontSize: 12, color: AppColors.primary, height: 1.4),
-            ),
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -392,15 +496,22 @@ class _HomeScreenState extends State<HomeScreen> {
   // Etiqueta de paso numerado
   // ---------------------------------------------------------------------------
 
-  Widget _buildStepLabel(String number, String title) {
+  Widget _buildStepLabel(BuildContext context, String number, String title) {
     return Row(
       children: [
         Container(
-          width: 26,
-          height: 26,
+          width: 28,
+          height: 28,
           decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(8),
+            gradient: const LinearGradient(colors: [AppColors.primary, AppColors.accent]),
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.30),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Center(
             child: Text(
@@ -416,10 +527,10 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(width: 10),
         Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
+            color: context.textPrimary,
           ),
         ),
       ],
@@ -430,7 +541,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Grid de avatares
   // ---------------------------------------------------------------------------
 
-  Widget _buildAvatarGrid() {
+  Widget _buildAvatarGrid(BuildContext context) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -438,14 +549,14 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 1.25,
+        childAspectRatio: 1.15,
       ),
       itemCount: _avatars.length,
-      itemBuilder: (_, index) => _buildAvatarCard(index),
+      itemBuilder: (_, index) => _buildAvatarCard(context, index),
     );
   }
 
-  Widget _buildAvatarCard(int index) {
+  Widget _buildAvatarCard(BuildContext context, int index) {
     final avatar = _avatars[index];
     final isSelected = _selectedAvatarIndex == index;
 
@@ -459,15 +570,17 @@ class _HomeScreenState extends State<HomeScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         decoration: BoxDecoration(
-          color: isSelected ? avatar.color.withOpacity(0.10) : AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
+          color: isSelected
+              ? avatar.color.withOpacity(context.isDark ? 0.15 : 0.08)
+              : context.cardColor,
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isSelected ? avatar.color : AppColors.divider,
+            color: isSelected ? avatar.color : context.dividerColor,
             width: isSelected ? 2.0 : 1.0,
           ),
           boxShadow: isSelected
-              ? [BoxShadow(color: avatar.color.withOpacity(0.18), blurRadius: 10, offset: const Offset(0, 3))]
-              : [],
+              ? [BoxShadow(color: avatar.color.withOpacity(0.22), blurRadius: 14, offset: const Offset(0, 4))]
+              : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -475,29 +588,46 @@ class _HomeScreenState extends State<HomeScreen> {
             Stack(
               alignment: Alignment.topRight,
               children: [
-                Text(avatar.emoji, style: const TextStyle(fontSize: 38)),
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: avatar.color.withOpacity(isSelected ? 0.18 : 0.10),
+                    shape: BoxShape.circle,
+                    border: isSelected
+                        ? Border.all(color: avatar.color.withOpacity(0.4), width: 2)
+                        : null,
+                  ),
+                  child: Icon(avatar.icon, color: avatar.color, size: 34),
+                ),
                 if (isSelected)
                   Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(color: avatar.color, shape: BoxShape.circle),
-                    child: const Icon(Icons.check, size: 12, color: Colors.white),
+                    padding: const EdgeInsets.all(2.5),
+                    decoration: BoxDecoration(
+                      color: avatar.color,
+                      shape: BoxShape.circle,
+                      border: const Border.fromBorderSide(
+                        BorderSide(color: Colors.white, width: 1.5),
+                      ),
+                    ),
+                    child: const Icon(Icons.check, size: 11, color: Colors.white),
                   ),
               ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               avatar.label,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: isSelected ? avatar.color : AppColors.textPrimary,
+                color: isSelected ? avatar.color : context.textPrimary,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 2),
             Text(
               avatar.description,
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+              style: TextStyle(fontSize: 10, color: context.textSecondary),
               textAlign: TextAlign.center,
             ),
           ],
@@ -510,35 +640,149 @@ class _HomeScreenState extends State<HomeScreen> {
   // Campo de texto
   // ---------------------------------------------------------------------------
 
-  Widget _buildTextInput() {
+  Widget _buildTextInput(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider),
+        color: context.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.dividerColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(context.isDark ? 0.2 : 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: TextField(
         controller: _textController,
         maxLines: 3,
         maxLength: 200,
+        style: TextStyle(fontSize: 14, color: context.textPrimary),
         decoration: InputDecoration(
           hintText: 'Ej: Hola, que tal?',
-          hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
+          hintStyle: TextStyle(color: context.textSecondary.withOpacity(0.5), fontSize: 14),
           contentPadding: const EdgeInsets.all(16),
           border: InputBorder.none,
           focusedBorder: InputBorder.none,
           enabledBorder: InputBorder.none,
-          counterStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-          prefixIcon: const Padding(
-            padding: EdgeInsets.only(left: 14, right: 10, top: 14),
+          counterStyle: TextStyle(color: context.textSecondary, fontSize: 11),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 14, right: 10, top: 14),
             child: Icon(Icons.text_fields_rounded, color: AppColors.primary, size: 20),
           ),
           prefixIconConstraints: const BoxConstraints(),
         ),
-        onChanged: (_) => setState(() {
-          _result = null;
-          _errorMessage = null;
-        }),
+        onChanged: (value) {
+          setState(() {
+            _result = null;
+            _errorMessage = null;
+          });
+          _fetchSuggestions(value);
+        },
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Búsqueda semántica — sugerencias del vocabulario de familia
+  // ---------------------------------------------------------------------------
+
+  Future<void> _fetchSuggestions(String text) async {
+    final lastWord = text.trim().split(' ').last;
+    if (lastWord.length < 2) {
+      if (_suggestions.isNotEmpty) setState(() => _suggestions = []);
+      return;
+    }
+    setState(() => _loadingSuggestions = true);
+    final results = await SearchService.search(lastWord);
+    if (mounted) setState(() { _suggestions = results; _loadingSuggestions = false; });
+  }
+
+  Widget _buildSuggestions(BuildContext context) {
+    if (_loadingSuggestions) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 14, height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5, color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text('Buscando señas…',
+                style: TextStyle(fontSize: 11, color: context.textSecondary)),
+          ],
+        ),
+      );
+    }
+    if (_suggestions.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.auto_awesome_rounded, size: 13, color: AppColors.accent),
+              const SizedBox(width: 5),
+              Text('Señas disponibles para esta palabra:',
+                  style: TextStyle(fontSize: 11, color: context.textSecondary,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: _suggestions.map((s) {
+              return GestureDetector(
+                onTap: () {
+                  // Reemplaza la última palabra del texto por la sugerida
+                  final parts = _textController.text.trim().split(' ');
+                  parts[parts.length - 1] = s.word;
+                  _textController.text = '${parts.join(' ')} ';
+                  _textController.selection = TextSelection.collapsed(
+                      offset: _textController.text.length);
+                  setState(() { _suggestions = []; _result = null; _errorMessage = null; });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, AppColors.accent],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.25),
+                        blurRadius: 8, offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.sign_language_rounded,
+                          size: 12, color: Colors.white),
+                      const SizedBox(width: 5),
+                      Text(
+                        s.word,
+                        style: const TextStyle(
+                          fontSize: 12, color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }
@@ -547,15 +791,15 @@ class _HomeScreenState extends State<HomeScreen> {
   // Chips de ejemplos rápidos
   // ---------------------------------------------------------------------------
 
-  Widget _buildExampleChips() {
+  Widget _buildExampleChips(BuildContext context) {
     final examples = ['Hola', 'Buenos dias', 'Como estas'];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Ejemplos rápidos:',
-          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 11, color: context.textSecondary),
         ),
         const SizedBox(height: 6),
         Wrap(
@@ -570,15 +814,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     _errorMessage = null;
                   }),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
+                      color: context.primaryContainerColor.withOpacity(0.6),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.25)),
                     ),
                     child: Text(
                       e,
-                      style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w500),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -617,36 +865,55 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Botón generar
+  // Botón generar — gradiente (igual que login)
   // ---------------------------------------------------------------------------
 
-  Widget _buildGenerateButton() {
+  Widget _buildGenerateButton(BuildContext context) {
     final canGenerate = _selectedAvatarIndex != null &&
         _textController.text.trim().isNotEmpty;
 
     return SizedBox(
       width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: canGenerate && !_isGenerating ? _onGenerate : null,
-        icon: _isGenerating
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-              )
-            : const Icon(Icons.play_circle_filled_rounded, size: 22),
-        label: Text(
-          _isGenerating ? 'Generando…' : 'Generar en LSM',
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+      height: 54,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: canGenerate
+              ? const LinearGradient(colors: [AppColors.primary, AppColors.accent])
+              : null,
+          color: canGenerate ? null : context.dividerColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: canGenerate
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.38),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
+                  )
+                ]
+              : [],
         ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: canGenerate ? AppColors.primary : AppColors.divider,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: AppColors.divider,
-          disabledForegroundColor: AppColors.textSecondary,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          elevation: canGenerate ? 2 : 0,
+        child: ElevatedButton.icon(
+          onPressed: canGenerate && !_isGenerating ? _onGenerate : null,
+          icon: _isGenerating
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                )
+              : const Icon(Icons.play_circle_filled_rounded, size: 24),
+          label: Text(
+            _isGenerating ? 'Generando…' : 'Generar en LSM',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            disabledBackgroundColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            disabledForegroundColor: context.textSecondary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
+          ),
         ),
       ),
     );
@@ -656,7 +923,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Tarjeta de resultado con reproductor secuencial
   // ---------------------------------------------------------------------------
 
-  Widget _buildResultCard() {
+  Widget _buildResultCard(BuildContext context) {
     final result = _result!;
     final avatar = _avatars[_selectedAvatarIndex!];
     final totalVideos = result.videoUrls.length;
@@ -664,11 +931,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.divider),
+        color: context.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.dividerColor),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black.withOpacity(context.isDark ? 0.3 : 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -676,7 +947,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           // ── Reproductor de video ──────────────────────────────────────────
           ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             child: SizedBox(
               width: double.infinity,
               height: 240,
@@ -690,15 +961,15 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Letra actual + progreso ───────────────────────────────
-                _buildLetterProgress(totalVideos),
+                _buildLetterProgress(context, totalVideos),
                 const SizedBox(height: 12),
 
                 // ── Controles prev / next ─────────────────────────────────
-                _buildVideoControls(totalVideos),
+                _buildVideoControls(context, totalVideos),
                 const SizedBox(height: 14),
 
                 // ── Chips de letras ────────────────────────────────────────
-                _buildTokensRow(result),
+                _buildTokensRow(context, result),
 
                 // ── Caracteres no soportados ──────────────────────────────
                 if (result.unsupportedCharacters.isNotEmpty) ...[
@@ -720,11 +991,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         _textController.clear();
                         _selectedAvatarIndex = null;
                         _currentVideoIndex = 0;
+                        _suggestions = [];
                       });
                     },
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('Nueva generación', style: TextStyle(fontSize: 12)),
-                    style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+                    icon: Icon(Icons.refresh_rounded, size: 16, color: context.textSecondary),
+                    label: Text(
+                      'Nueva generación',
+                      style: TextStyle(fontSize: 12, color: context.textSecondary),
+                    ),
+                    style: TextButton.styleFrom(foregroundColor: context.textSecondary),
                   ),
                 ),
               ],
@@ -749,7 +1024,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (controller == null || !controller.value.isInitialized) {
       return Container(
         color: const Color(0xFF0F172A),
-        child: Center(child: Text(avatar.emoji, style: const TextStyle(fontSize: 64))),
+        child: Center(
+          child: Icon(avatar.icon, color: avatar.color.withOpacity(0.6), size: 72),
+        ),
       );
     }
 
@@ -818,7 +1095,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildLetterProgress(int total) {
+  Widget _buildLetterProgress(BuildContext context, int total) {
     final result = _result!;
     final url = result.videoUrls[_currentVideoIndex];
     final letter = url.split('/').last.replaceAll('.mp4', '');
@@ -828,7 +1105,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: AppColors.primary,
+            gradient: const LinearGradient(colors: [AppColors.primary, AppColors.accent]),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
@@ -839,20 +1116,28 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(width: 10),
         Text(
           'Seña ${_currentVideoIndex + 1} de $total',
-          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 13, color: context.textSecondary),
         ),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: const Color(0xFFD1FAE5),
+            color: AppColors.success.withOpacity(0.12),
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.success.withOpacity(0.3)),
           ),
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF059669)),
-              SizedBox(width: 4),
-              Text('Listo', style: TextStyle(fontSize: 11, color: Color(0xFF065F46), fontWeight: FontWeight.bold)),
+              Icon(Icons.check_circle_rounded, size: 12, color: AppColors.success),
+              const SizedBox(width: 4),
+              Text(
+                'Listo',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppColors.success,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ],
           ),
         ),
@@ -860,7 +1145,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildVideoControls(int total) {
+  Widget _buildVideoControls(BuildContext context, int total) {
     return Row(
       children: [
         Expanded(
@@ -872,32 +1157,44 @@ class _HomeScreenState extends State<HomeScreen> {
             label: const Text('Anterior', style: TextStyle(fontSize: 12)),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
+              side: BorderSide(color: AppColors.primary.withOpacity(0.6)),
               padding: const EdgeInsets.symmetric(vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: ElevatedButton.icon(
-            onPressed: !_videoLoading
-                ? () => _loadVideo(_currentVideoIndex < total - 1 ? _currentVideoIndex + 1 : 0)
-                : null,
-            icon: Icon(
-              _currentVideoIndex < total - 1 ? Icons.skip_next_rounded : Icons.replay_rounded,
-              size: 18,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: !_videoLoading
+                  ? const LinearGradient(colors: [AppColors.primary, AppColors.accent])
+                  : null,
+              color: _videoLoading ? context.dividerColor : null,
+              borderRadius: BorderRadius.circular(12),
             ),
-            label: Text(
-              _currentVideoIndex < total - 1 ? 'Siguiente' : 'Repetir',
-              style: const TextStyle(fontSize: 12),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
+            child: ElevatedButton.icon(
+              onPressed: !_videoLoading
+                  ? () => _loadVideo(_currentVideoIndex < total - 1 ? _currentVideoIndex + 1 : 0)
+                  : null,
+              icon: Icon(
+                _currentVideoIndex < total - 1 ? Icons.skip_next_rounded : Icons.replay_rounded,
+                size: 18,
+              ),
+              label: Text(
+                _currentVideoIndex < total - 1 ? 'Siguiente' : 'Repetir',
+                style: const TextStyle(fontSize: 12),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                disabledBackgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                disabledForegroundColor: context.textSecondary,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
             ),
           ),
         ),
@@ -905,7 +1202,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTokensRow(SignResult result) {
+  Widget _buildTokensRow(BuildContext context, SignResult result) {
     return Wrap(
       spacing: 6,
       runSpacing: 6,
@@ -920,10 +1217,13 @@ class _HomeScreenState extends State<HomeScreen> {
             duration: const Duration(milliseconds: 150),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: isCurrent ? AppColors.primary : AppColors.background,
+              gradient: isCurrent
+                  ? const LinearGradient(colors: [AppColors.primary, AppColors.accent])
+                  : null,
+              color: isCurrent ? null : context.cardVariant,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isCurrent ? AppColors.primary : AppColors.divider,
+                color: isCurrent ? Colors.transparent : context.dividerColor,
               ),
             ),
             child: Text(
@@ -931,7 +1231,7 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: isCurrent ? Colors.white : AppColors.textPrimary,
+                color: isCurrent ? Colors.white : context.textPrimary,
               ),
             ),
           ),
@@ -944,19 +1244,19 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
+        color: AppColors.warning.withOpacity(0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFED7AA)),
+        border: Border.all(color: AppColors.warning.withOpacity(0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Color(0xFFEA580C), size: 16),
+          Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'Sin seña disponible: ${unsupported.join(', ')}',
-              style: const TextStyle(fontSize: 11, color: Color(0xFF9A3412)),
+              style: TextStyle(fontSize: 11, color: AppColors.warning),
             ),
           ),
         ],
@@ -968,14 +1268,23 @@ class _HomeScreenState extends State<HomeScreen> {
   // Hoja de datos sensibles
   // ---------------------------------------------------------------------------
 
+  IconData _sensitiveFieldIcon(String key) {
+    if (key.contains('correo')) return Icons.email_outlined;
+    if (key.contains('nombre')) return Icons.person_outline_rounded;
+    if (key.contains('token') || key.contains('FCM')) return Icons.notifications_outlined;
+    if (key.contains('región') || key.contains('region')) return Icons.location_on_outlined;
+    return Icons.lock_outline_rounded;
+  }
+
   void _showSensitiveDataSheet(BuildContext context, SessionProvider session) {
     final fields = SensitiveDataService.fieldDescriptions;
     showModalBottomSheet(
       context: context,
+      backgroundColor: context.cardColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => Padding(
+      builder: (sheetCtx) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -984,40 +1293,44 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(9),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.accent]),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.shield, color: AppColors.primary, size: 22),
+                  child: const Icon(Icons.shield, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Datos sensibles protegidos',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: context.textPrimary,
+                        ),
                       ),
                       Text(
                         'Cifrado AES-256 · Solo en este dispositivo',
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        style: TextStyle(fontSize: 12, color: context.textSecondary),
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            const Divider(),
+            const SizedBox(height: 10),
+            Divider(color: context.dividerColor),
             const SizedBox(height: 4),
             ...fields.map(
               (f) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
                   children: [
-                    Text(f.icon, style: const TextStyle(fontSize: 20)),
+                    Icon(_sensitiveFieldIcon(f.key), color: AppColors.primary, size: 22),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -1025,7 +1338,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             f.key,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: context.textPrimary,
+                            ),
                           ),
                           Text(
                             f.classification,
@@ -1047,18 +1364,19 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
+                color: AppColors.warning.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.warning.withOpacity(0.25)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: Color(0xFFE65100)),
-                  SizedBox(width: 8),
-                  Expanded(
+                  Icon(Icons.info_outline, size: 16, color: AppColors.warning),
+                  const SizedBox(width: 8),
+                  const Expanded(
                     child: Text(
                       'El administrador puede eliminar estos datos remotamente '
                       'enviando una notificación FCM con type: remote_wipe.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFFE65100)),
+                      style: TextStyle(fontSize: 11, color: AppColors.warning),
                     ),
                   ),
                 ],
