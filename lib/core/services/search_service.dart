@@ -1,4 +1,5 @@
 import 'api_client.dart';
+import 'auth_service.dart';
 
 /// Resultado de búsqueda semántica del endpoint GET /signs/search
 class SignSuggestion {
@@ -27,9 +28,11 @@ class SearchService {
   static Future<List<SignSuggestion>> search(String query) async {
     if (query.trim().isEmpty) return [];
     try {
+      final token = await AuthService.getToken();
       final results = await ApiClient.getList(
         '/signs/search',
         queryParams: {'q': query.trim()},
+        token: token,
       );
       return results
           .map((e) => SignSuggestion.fromJson(e as Map<String, dynamic>))
