@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 
-class PrivacyPolicyScreen extends StatelessWidget {
-  const PrivacyPolicyScreen({super.key});
+class TermsAndConditionsScreen extends StatelessWidget {
+  const TermsAndConditionsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +19,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
           scrolledUnderElevation: 0,
           foregroundColor: context.textPrimary,
           title: Text(
-            'Política de Privacidad',
+            'Términos y Condiciones',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -41,88 +41,105 @@ class PrivacyPolicyScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _sectionTitle(context, 'VirtualSign LSM — Política de Privacidad'),
+              _sectionTitle(context, 'VirtualSign LSM — Términos y Condiciones de Uso'),
               _meta(context, 'Desarrollador: KitsuneDev'),
               _meta(context, 'Última actualización: 26 de junio de 2026'),
               const SizedBox(height: 16),
               _body(
                 context,
-                'Esta Política de Privacidad describe cómo VirtualSign LSM recopila, '
-                'usa y protege la información de sus usuarios. Al utilizar la '
-                'aplicación, aceptas los términos descritos en este documento.',
+                'Al registrarte y usar VirtualSign LSM, aceptas quedar vinculado '
+                'por estos Términos y Condiciones. Si no estás de acuerdo con '
+                'alguno de ellos, no debes utilizar la aplicación.',
               ),
               const SizedBox(height: 24),
 
-              _heading(context, '1. Información que recopilamos'),
-              _bullet(context, 'Correo electrónico y contraseña',
-                  'Necesarios para crear una cuenta e iniciar sesión.'),
-              _bullet(context, 'Texto ingresado por el usuario',
-                  'El texto que introduces para generar las señas en LSM. Se envía al servidor únicamente para procesar la solicitud y no se almacena de forma permanente.'),
-              _bullet(context, 'Ubicación geográfica',
-                  'Se solicita acceso a la ubicación del dispositivo para funciones contextuales. No se comparte con terceros.'),
-              _bullet(context, 'Token de dispositivo (Firebase)',
-                  'Se utiliza exclusivamente para el envío de notificaciones push.'),
-              const SizedBox(height: 20),
-
-              _heading(context, '2. Cómo usamos la información'),
-              _bullet(context, 'Autenticación',
-                  'Para autenticar al usuario mediante JWT (JSON Web Tokens).'),
-              _bullet(context, 'Generación de señas',
-                  'Para generar videos de Lengua de Señas Mexicana (LSM) a partir del texto proporcionado.'),
-              _bullet(context, 'Notificaciones',
-                  'Para enviar alertas relacionadas con el servicio.'),
-              const SizedBox(height: 20),
-
-              _heading(context, '3. Almacenamiento y seguridad'),
+              _heading(context, '1. Descripción del servicio'),
               _body(
                 context,
-                'Los datos sensibles (credenciales de acceso y tokens) se almacenan '
-                'localmente en el dispositivo con cifrado AES-256. El administrador '
-                'puede eliminarlos de forma remota mediante una notificación FCM '
-                'autorizada.\n\nNo compartimos tu información personal con terceros, '
-                'anunciantes ni servicios de análisis externos.',
+                'VirtualSign LSM es una aplicación móvil que convierte texto en '
+                'animaciones de Lengua de Señas Mexicana (LSM) mediante avatares '
+                'digitales. El servicio incluye un generador de señas por texto, '
+                'un diccionario de vocabulario LSM y un historial de generaciones.',
               ),
               const SizedBox(height: 20),
 
-              _heading(context, '4. Retención de datos'),
+              _heading(context, '2. Cuenta de usuario'),
+              _bullet(context, 'Registro',
+                  'Para usar la aplicación debes crear una cuenta con un correo electrónico válido y una contraseña segura.'),
+              _bullet(context, 'Responsabilidad',
+                  'Eres responsable de mantener la confidencialidad de tu contraseña y de todas las actividades realizadas desde tu cuenta.'),
+              _bullet(context, 'Veracidad',
+                  'Debes proporcionar información veraz y actualizada durante el registro.'),
+              const SizedBox(height: 20),
+
+              _heading(context, '3. Uso aceptable'),
+              _body(context, 'Al utilizar VirtualSign LSM te comprometes a:'),
+              _bullet(context, 'Uso personal',
+                  'Usar la aplicación únicamente para fines educativos y de comunicación.'),
+              _bullet(context, 'Prohibiciones',
+                  'No reproducir, distribuir ni explotar comercialmente los videos generados sin autorización expresa de KitsuneDev.'),
+              _bullet(context, 'Contenido',
+                  'No introducir texto que contenga lenguaje ofensivo, amenazas o contenido ilegal para generar señas.'),
+              _bullet(context, 'Ingeniería inversa',
+                  'No intentar descompilar, modificar ni realizar ingeniería inversa del servicio o sus componentes.'),
+              const SizedBox(height: 20),
+
+              _heading(context, '4. Propiedad intelectual'),
               _body(
                 context,
-                'Los datos de la cuenta se conservan mientras el usuario mantenga '
-                'su cuenta activa. Puedes solicitar la eliminación de tu cuenta y '
-                'datos asociados contactando al desarrollador.',
+                'Los avatares, animaciones, algoritmos de generación de señas y '
+                'el contenido del diccionario son propiedad de KitsuneDev o de '
+                'sus respectivos titulares de derechos. El uso de la aplicación '
+                'no te otorga ningún derecho de propiedad sobre dichos elementos.',
               ),
               const SizedBox(height: 20),
 
-              _heading(context, '5. Permisos del dispositivo'),
-              _bullet(context, 'Internet',
-                  'Para comunicarse con el servidor de la API.'),
-              _bullet(context, 'Ubicación',
-                  'Para funciones contextuales de la aplicación.'),
-              _bullet(context, 'Notificaciones',
-                  'Para recibir alertas del servicio.'),
-              const SizedBox(height: 20),
-
-              _heading(context, '6. Menores de edad'),
+              _heading(context, '5. Limitación de responsabilidad'),
               _body(
                 context,
-                'VirtualSign LSM no está dirigida a menores de 13 años. No '
-                'recopilamos intencionalmente información de menores de edad.',
+                'VirtualSign LSM se ofrece "tal cual" sin garantías de ningún '
+                'tipo. KitsuneDev no será responsable de daños directos, '
+                'indirectos o incidentales que puedan derivarse del uso o '
+                'la imposibilidad de uso de la aplicación.',
+              ),
+              _body(
+                context,
+                'Las traducciones a LSM generadas por la aplicación son de '
+                'carácter orientativo y no sustituyen la interpretación de un '
+                'intérprete certificado.',
               ),
               const SizedBox(height: 20),
 
-              _heading(context, '7. Cambios a esta política'),
+              _heading(context, '6. Cancelación de cuenta'),
               _body(
                 context,
-                'Podemos actualizar esta política en cualquier momento. '
-                'Notificaremos los cambios significativos a través de la '
-                'aplicación. El uso continuo implica la aceptación de la '
-                'nueva política.',
+                'Puedes eliminar tu cuenta en cualquier momento desde la sección '
+                'de perfil de la aplicación. Esto eliminará permanentemente tus '
+                'datos y el historial de generaciones almacenado en el servidor.',
               ),
               const SizedBox(height: 20),
 
-              _heading(context, '8. Contacto'),
+              _heading(context, '7. Modificaciones del servicio'),
+              _body(
+                context,
+                'KitsuneDev se reserva el derecho de modificar, suspender o '
+                'discontinuar el servicio en cualquier momento. En caso de '
+                'cambios significativos, se notificará a través de la aplicación.',
+              ),
+              const SizedBox(height: 20),
+
+              _heading(context, '8. Ley aplicable'),
+              _body(
+                context,
+                'Estos términos se rigen por las leyes de los Estados Unidos '
+                'Mexicanos. Cualquier disputa será sometida a la jurisdicción '
+                'de los tribunales competentes de México.',
+              ),
+              const SizedBox(height: 20),
+
+              _heading(context, '9. Contacto'),
               _body(context,
-                  'Para cualquier pregunta sobre esta política, contáctanos en:'),
+                  'Para consultas sobre estos términos, contáctanos en:'),
               const SizedBox(height: 6),
               Text(
                 'virtualsignsupport@gmail.com',

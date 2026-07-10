@@ -24,21 +24,25 @@ class WordDetailScreen extends StatefulWidget {
 class _WordDetailScreenState extends State<WordDetailScreen> {
   late String _selectedAvatarCode;
   VideoPlayerController? _videoController;
-  bool _videoLoading = false;
+  bool _videoLoading = true;
   bool _videoError = false;
+  String _debugError = '';  // mensaje del error real para diagnóstico
 
   static const _avatars = [
-    (id: 'nino',         icon: Icons.boy_rounded,    label: 'Niño',         color: Color(0xFF2563EB)),
-    (id: 'nina',         icon: Icons.girl_rounded,   label: 'Niña',         color: Color(0xFFDB2777)),
-    (id: 'hombre_adulto',icon: Icons.man_rounded,    label: 'Hombre',       color: Color(0xFF059669)),
-    (id: 'mujer_adulta', icon: Icons.woman_rounded,  label: 'Mujer',        color: Color(0xFF7C3AED)),
+    (id: 'nino',         icon: Icons.boy_rounded,    label: 'Niño',   color: Color(0xFF0099B3)),
+    (id: 'nina',         icon: Icons.girl_rounded,   label: 'Niña',   color: Color(0xFFDB2777)),
+    (id: 'hombre_adulto',icon: Icons.man_rounded,    label: 'Hombre', color: Color(0xFF059669)),
+    (id: 'mujer_adulta', icon: Icons.woman_rounded,  label: 'Mujer',  color: Color(0xFF7C3AED)),
   ];
 
   @override
   void initState() {
     super.initState();
     _selectedAvatarCode = widget.initialAvatarCode;
-    _loadVideo();
+    // Diferimos _loadVideo al post-frame para evitar setState durante initState
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadVideo();
+    });
   }
 
   @override
@@ -53,22 +57,27 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     await old?.dispose();
   }
 
+  /// Descarga el video a un archivo temporal y luego lo reproduce con
+  /// VideoPlayerController.file(). Esto evita los problemas que tiene
+  /// ExoPlayer al inicializar videos de red cuando el servidor no envía
+  /// los headers esperados (Accept-Ranges / Content-Type).
   Future<void> _loadVideo() async {
+    if (!mounted) return;
     setState(() { _videoLoading = true; _videoError = false; });
     await _disposeController();
 
-    final path = '/signs/$_selectedAvatarCode/${widget.word}.mp4';
-    final url = SignsService.buildVideoUrl(path);
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final url = SignsService.buildVideoUrl('/signs/$_selectedAvatarCode/${widget.word}.mp4');
 
     try {
+      final controller = VideoPlayerController.networkUrl(Uri.parse(url));
       await controller.initialize();
       if (!mounted) { controller.dispose(); return; }
-      setState(() { _videoController = controller; _videoLoading = false; });
+
+      setState(() { _videoController = controller; _videoLoading = false; _debugError = ''; });
+      controller.setLooping(true);
       controller.play();
-    } catch (_) {
-      controller.dispose();
-      if (mounted) setState(() { _videoLoading = false; _videoError = true; });
+    } catch (e) {
+      if (mounted) setState(() { _videoLoading = false; _videoError = true; _debugError = e.toString(); });
     }
   }
 
@@ -124,7 +133,7 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.accent]),
+                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.sign_language_rounded, color: Colors.white, size: 22),
@@ -218,17 +227,44 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
 
   Widget _buildVideoArea(({String id, IconData icon, String label, Color color}) avatarInfo) {
     if (_videoLoading) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white54));
-    }
-    if (_videoError) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline_rounded, color: Colors.white38, size: 48),
-            const SizedBox(height: 12),
-            const Text('No se pudo cargar el video', style: TextStyle(color: Colors.white54, fontSize: 13)),
+            const CircularProgressIndicator(color: Colors.white54),
+            if (_debugError.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(_debugError,
+                    style: const TextStyle(color: Colors.white38, fontSize: 10),
+                    textAlign: TextAlign.center),
+              ),
+            ],
           ],
+        ),
+      );
+    }
+    if (_videoError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white38, size: 48),
+              const SizedBox(height: 12),
+              const Text('No se pudo cargar el video', style: TextStyle(color: Colors.white54, fontSize: 13)),
+              if (_debugError.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _debugError,
+                  style: const TextStyle(color: Colors.orange, fontSize: 10),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          ),
         ),
       );
     }
@@ -240,7 +276,21 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
       alignment: Alignment.center,
       children: [
         Container(color: Colors.black),
-        Center(child: AspectRatio(aspectRatio: controller.value.aspectRatio, child: VideoPlayer(controller))),
+        // Zoom centrado en la zona superior donde está el personaje.
+        // alignment Y=-0.4 sube el punto de escala, mostrando la parte
+        // superior del video donde aparece el avatar.
+        ClipRect(
+          child: Transform.scale(
+            scale: 2.2,
+            alignment: const Alignment(0, -0.4),
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: controller.value.aspectRatio,
+                child: VideoPlayer(controller),
+              ),
+            ),
+          ),
+        ),
         Positioned(
           bottom: 12, right: 14,
           child: ValueListenableBuilder(

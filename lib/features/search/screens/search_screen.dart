@@ -196,7 +196,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 Container(
                   width: 44, height: 44,
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.accent]),
+                    gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.sign_language_rounded, color: Colors.white, size: 22),

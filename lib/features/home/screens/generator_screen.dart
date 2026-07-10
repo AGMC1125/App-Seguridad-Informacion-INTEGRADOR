@@ -1,11 +1,17 @@
+import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import '../../../core/providers/session_provider.dart';
+import '../../../core/services/history_service.dart';
 import '../../../core/services/signs_service.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/search_service.dart';
-import '../models/sign_result.dart';
+import '../models/merged_video_result.dart';
 import '../../../theme/app_theme.dart';
 
 // ---------------------------------------------------------------------------
@@ -29,7 +35,7 @@ class _AvatarOption {
 }
 
 // ---------------------------------------------------------------------------
-// GeneratorScreen — texto → señas LSM letra por letra
+// GeneratorScreen — texto → señas LSM (video fusionado)
 // ---------------------------------------------------------------------------
 
 class GeneratorScreen extends StatefulWidget {
@@ -45,14 +51,20 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   bool _isGenerating = false;
   String? _errorMessage;
 
-  SignResult? _result;
+  MergedVideoResult? _result;
 
   VideoPlayerController? _videoController;
-  int _currentVideoIndex = 0;
   bool _videoLoading = false;
+
+  bool _isSavingHistory = false;
+  bool _historyAlreadySaved = false;
+  bool _isSharing = false;
 
   List<SignSuggestion> _suggestions = [];
   bool _loadingSuggestions = false;
+
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _resultKey = GlobalKey();
 
   static const List<_AvatarOption> _avatars = [
     _AvatarOption(
@@ -88,6 +100,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   @override
   void dispose() {
     _textController.dispose();
+    _scrollController.dispose();
     _disposeVideoController();
     super.dispose();
   }
@@ -96,11 +109,11 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   // Video player helpers
   // ---------------------------------------------------------------------------
 
-  Future<void> _loadVideo(int index) async {
-    if (_result == null || index >= _result!.videoUrls.length) return;
+  Future<void> _loadVideo() async {
+    if (_result == null) return;
     setState(() => _videoLoading = true);
     await _disposeVideoController();
-    final url = SignsService.buildVideoUrl(_result!.videoUrls[index]);
+    final url = SignsService.buildVideoUrl(_result!.mergedVideoUrl);
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     try {
       await controller.initialize();
@@ -108,28 +121,18 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
       if (!mounted) { controller.dispose(); return; }
       setState(() {
         _videoController = controller;
-        _currentVideoIndex = index;
         _videoLoading = false;
       });
       controller.play();
     } catch (_) {
       controller.dispose();
       if (mounted) setState(() => _videoLoading = false);
-      if (index + 1 < (_result?.videoUrls.length ?? 0)) {
-        await _loadVideo(index + 1);
-      }
     }
   }
 
   void _onVideoProgress() {
-    final controller = _videoController;
-    if (controller == null) return;
-    final pos = controller.value.position;
-    final dur = controller.value.duration;
-    if (dur.inMilliseconds > 0 && pos >= dur - const Duration(milliseconds: 200)) {
-      final next = _currentVideoIndex + 1;
-      if (next < (_result?.videoUrls.length ?? 0)) _loadVideo(next);
-    }
+    // El video fusionado se detiene en el último frame al terminar.
+    // No se requiere carga secuencial.
   }
 
   Future<void> _disposeVideoController() async {
@@ -154,14 +157,24 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
     });
     await _disposeVideoController();
     try {
-      final result = await SignsService.generate(text: text, avatarCode: avatar.id);
+      final result = await SignsService.generateMerged(text: text, avatarCode: avatar.id);
       if (!mounted) return;
-      if (result.videoUrls.isEmpty) {
+      if (result.mergedVideoUrl.isEmpty) {
         setState(() { _isGenerating = false; _errorMessage = 'No se encontraron señas para el texto ingresado.'; });
         return;
       }
-      setState(() { _result = result; _isGenerating = false; });
-      await _loadVideo(0);
+      setState(() { _result = result; _isGenerating = false; _historyAlreadySaved = false; });
+      await _loadVideo();
+      // Auto-scroll hacia la tarjeta de resultado
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 700),
+            curve: Curves.easeInOutCubic,
+          );
+        }
+      });
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() { _isGenerating = false; _errorMessage = e.message; });
@@ -172,30 +185,153 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   }
 
   // ---------------------------------------------------------------------------
+  // Acciones: historial, descarga, compartir
+  // ---------------------------------------------------------------------------
+
+  Future<void> _saveToHistory() async {
+    if (_isSavingHistory || _historyAlreadySaved || _result == null) return;
+    final token = context.read<SessionProvider>().sessionToken;
+    if (token.isEmpty) return;
+    setState(() => _isSavingHistory = true);
+    try {
+      await HistoryService.saveToHistory(
+        token: token,
+        originalText: _result!.originalText,
+        avatarCode: _result!.avatarCode,
+        generatedFilename: _result!.generatedFilename,
+      );
+      if (!mounted) return;
+      setState(() { _isSavingHistory = false; _historyAlreadySaved = true; });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Guardado en historial'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSavingHistory = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No se pudo guardar en historial'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  /// Descarga el video fusionado al almacenamiento externo del dispositivo.
+  Future<void> _downloadVideo() async {
+    if (_isSharing || _result == null) return;
+    setState(() => _isSharing = true);
+    try {
+      final url = SignsService.buildVideoUrl(_result!.mergedVideoUrl);
+      final response = await http.get(Uri.parse(url));
+      final Directory dir;
+      if (Platform.isAndroid) {
+        dir = (await getExternalStorageDirectory())!;
+      } else {
+        dir = await getApplicationDocumentsDirectory();
+      }
+      final filename = (_result!.generatedFilename.isNotEmpty)
+          ? _result!.generatedFilename
+          : 'sena_lsm_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final file = File('${dir.path}/$filename');
+      await file.writeAsBytes(response.bodyBytes);
+      if (!mounted) return;
+      setState(() => _isSharing = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Video guardado: $filename'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSharing = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Error al descargar el video'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  /// Descarga a temp y abre el selector de apps (incluye WhatsApp).
+  Future<void> _shareViaWhatsApp() async {
+    if (_isSharing || _result == null) return;
+    setState(() => _isSharing = true);
+    try {
+      final url = SignsService.buildVideoUrl(_result!.mergedVideoUrl);
+      final response = await http.get(Uri.parse(url));
+      final tmpDir = await getTemporaryDirectory();
+      final filename = (_result!.generatedFilename.isNotEmpty)
+          ? _result!.generatedFilename
+          : 'sena_lsm_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final file = File('${tmpDir.path}/$filename');
+      await file.writeAsBytes(response.bodyBytes);
+      if (!mounted) return;
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'video/mp4')],
+        text: 'Seña LSM: "${_result!.originalText}"',
+      );
+      if (mounted) setState(() => _isSharing = false);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isSharing = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Error al compartir el video'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Build
   // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: context.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text('Generador de Señas',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: context.textPrimary)),
-        backgroundColor: context.cardColor,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Divider(height: 1, color: context.dividerColor),
-        ),
+    final isDark = context.isDark;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: isDark ? AppGradients.dark : AppGradients.light,
       ),
-      body: SingleChildScrollView(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new_rounded, color: context.textPrimary, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text('Generador de Señas',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: context.textPrimary)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: false,
+          flexibleSpace: ClipRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Divider(height: 1, color: isDark ? const Color(0x22FFFFFF) : const Color(0x22000000)),
+          ),
+        ),
+        body: Stack(
+          children: [
+            Positioned(
+              top: -40, right: -40,
+              child: AppBlob(size: 220, color: AppColors.primary, opacity: isDark ? 0.09 : 0.07),
+            ),
+            Positioned(
+              bottom: 80, left: -40,
+              child: AppBlob(size: 180, color: AppColors.violet, opacity: isDark ? 0.07 : 0.05),
+            ),
+            SingleChildScrollView(
+        controller: _scrollController,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,7 +391,10 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
 
             if (_result != null) ...[
               const SizedBox(height: 32),
-              _buildStepLabel(context, '3', 'Reproducción de señas'),
+              KeyedSubtree(
+                key: _resultKey,
+                child: _buildStepLabel(context, '3', 'Reproducción de señas'),
+              ),
               const SizedBox(height: 14),
               _buildResultCard(context),
             ],
@@ -263,8 +402,71 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
             const SizedBox(height: 36),
           ],
         ),
-      ),
-    );
+      ),  // SingleChildScrollView
+
+            // Overlay de carga al generar
+            if (_isGenerating)
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    color: (isDark ? Colors.black : Colors.white).withOpacity(0.45),
+                    child: Center(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
+                        decoration: BoxDecoration(
+                          color: context.cardColor,
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(color: context.dividerColor),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withOpacity(0.18),
+                              blurRadius: 40,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 56, height: 56,
+                              child: CircularProgressIndicator(
+                                color: AppColors.primary,
+                                strokeWidth: 3.5,
+                                backgroundColor: AppColors.primary.withOpacity(0.12),
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            Text(
+                              'Generando señas',
+                              style: TextStyle(
+                                color: context.textPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Procesando el video en LSM…',
+                              style: TextStyle(
+                                color: context.textSecondary,
+                                fontSize: 13,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],  // Stack.children
+        ),  // Stack
+      ),  // Scaffold
+    );  // Container
   }
 
   // ---------------------------------------------------------------------------
@@ -576,7 +778,6 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   Widget _buildResultCard(BuildContext context) {
     final result = _result!;
     final avatar = _avatars[_selectedAvatarIndex!];
-    final totalVideos = result.videoUrls.length;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -596,11 +797,13 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildLetterProgress(context, totalVideos),
+                _buildVideoInfo(context, result),
                 const SizedBox(height: 12),
-                _buildVideoControls(context, totalVideos),
+                _buildVideoControls(context),
+                const SizedBox(height: 12),
+                _buildActionButtons(context),
                 const SizedBox(height: 14),
-                _buildTokensRow(context, result),
+                _buildTextTokens(context, result),
                 if (result.unsupportedCharacters.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   _buildUnsupportedChips(result.unsupportedCharacters),
@@ -614,7 +817,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                       setState(() {
                         _result = null; _errorMessage = null;
                         _textController.clear(); _selectedAvatarIndex = null;
-                        _currentVideoIndex = 0; _suggestions = [];
+                        _suggestions = [];
                       });
                     },
                     icon: Icon(Icons.refresh_rounded, size: 16, color: context.textSecondary),
@@ -628,6 +831,95 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
         ],
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Text tokens & unsupported chars
+  // ---------------------------------------------------------------------------
+
+  Widget _buildTextTokens(BuildContext context, MergedVideoResult result) {
+    final tokens = result.originalText
+        .trim()
+        .split(' ')
+        .where((t) => t.isNotEmpty)
+        .toList();
+    if (tokens.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Palabras generadas',
+          style: TextStyle(fontSize: 11, color: context.textSecondary, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: tokens
+              .map((t) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.09),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.22)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.sign_language_rounded, size: 11, color: AppColors.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          t.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ))
+              .toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUnsupportedChips(List<String> chars) {
+    return Builder(builder: (context) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Caracteres no disponibles en LSM',
+            style: TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: chars
+                .map((c) => Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.warning.withOpacity(0.30)),
+                      ),
+                      child: Text(
+                        c,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ))
+                .toList(),
+          ),
+        ],
+      );
+    });
   }
 
   Widget _buildVideoPlayer(_AvatarOption avatar) {
@@ -646,7 +938,6 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
       children: [
         Container(color: Colors.black),
         Center(child: AspectRatio(aspectRatio: controller.value.aspectRatio, child: VideoPlayer(controller))),
-        Positioned(top: 10, left: 14, child: _buildLetterBadge(avatar.color)),
         Positioned(
           bottom: 10, right: 14,
           child: ValueListenableBuilder(
@@ -668,19 +959,8 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
     );
   }
 
-  Widget _buildLetterBadge(Color color) {
-    final result = _result;
-    if (result == null) return const SizedBox.shrink();
-    final letter = result.videoUrls[_currentVideoIndex].split('/').last.replaceAll('.mp4', '');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.9), borderRadius: BorderRadius.circular(8)),
-      child: Text(letter, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _buildLetterProgress(BuildContext context, int total) {
-    final letter = _result!.videoUrls[_currentVideoIndex].split('/').last.replaceAll('.mp4', '');
+  Widget _buildVideoInfo(BuildContext context, MergedVideoResult result) {
+    final charCount = result.originalText.replaceAll(' ', '').length;
     return Row(
       children: [
         Container(
@@ -689,10 +969,18 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
             gradient: const LinearGradient(colors: [AppColors.primary, AppColors.accent]),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Text(letter, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.video_file_rounded, color: Colors.white, size: 14),
+              const SizedBox(width: 5),
+              const Text('Video fusionado',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+            ],
+          ),
         ),
         const SizedBox(width: 10),
-        Text('Seña ${_currentVideoIndex + 1} de $total', style: TextStyle(fontSize: 13, color: context.textSecondary)),
+        Text('$charCount letras', style: TextStyle(fontSize: 13, color: context.textSecondary)),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -710,23 +998,9 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
     );
   }
 
-  Widget _buildVideoControls(BuildContext context, int total) {
+  Widget _buildVideoControls(BuildContext context) {
     return Row(
       children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _currentVideoIndex > 0 && !_videoLoading ? () => _loadVideo(_currentVideoIndex - 1) : null,
-            icon: const Icon(Icons.skip_previous_rounded, size: 18),
-            label: const Text('Anterior', style: TextStyle(fontSize: 12)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: BorderSide(color: AppColors.primary.withOpacity(0.6)),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
         Expanded(
           child: DecoratedBox(
             decoration: BoxDecoration(
@@ -735,12 +1009,14 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: ElevatedButton.icon(
-              onPressed: !_videoLoading
-                  ? () => _loadVideo(_currentVideoIndex < total - 1 ? _currentVideoIndex + 1 : 0)
+              onPressed: !_videoLoading && _videoController != null
+                  ? () async {
+                      await _videoController?.seekTo(Duration.zero);
+                      _videoController?.play();
+                    }
                   : null,
-              icon: Icon(_currentVideoIndex < total - 1 ? Icons.skip_next_rounded : Icons.replay_rounded, size: 18),
-              label: Text(_currentVideoIndex < total - 1 ? 'Siguiente' : 'Repetir',
-                  style: const TextStyle(fontSize: 12)),
+              icon: const Icon(Icons.replay_rounded, size: 18),
+              label: const Text('Repetir video', style: TextStyle(fontSize: 12)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent, shadowColor: Colors.transparent,
                 disabledBackgroundColor: Colors.transparent,
@@ -755,47 +1031,85 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
     );
   }
 
-  Widget _buildTokensRow(BuildContext context, SignResult result) {
-    return Wrap(
-      spacing: 6, runSpacing: 6,
-      children: List.generate(result.videoUrls.length, (i) {
-        final letter = result.videoUrls[i].split('/').last.replaceAll('.mp4', '');
-        final isCurrent = i == _currentVideoIndex;
-        return GestureDetector(
-          onTap: () => _loadVideo(i),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              gradient: isCurrent ? const LinearGradient(colors: [AppColors.primary, AppColors.accent]) : null,
-              color: isCurrent ? null : context.cardVariant,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: isCurrent ? Colors.transparent : context.dividerColor),
-            ),
-            child: Text(letter,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold,
-                    color: isCurrent ? Colors.white : context.textPrimary)),
-          ),
-        );
-      }),
+  Widget _buildActionButtons(BuildContext context) {
+    return Row(
+      children: [
+        _buildActionChip(
+          context,
+          icon: _historyAlreadySaved
+              ? Icons.bookmark_rounded
+              : (_isSavingHistory ? null : Icons.bookmark_add_outlined),
+          label: _historyAlreadySaved ? 'En historial' : 'Historial',
+          color: _historyAlreadySaved ? AppColors.success : AppColors.primary,
+          loading: _isSavingHistory,
+          onTap: (_isSavingHistory || _historyAlreadySaved) ? null : _saveToHistory,
+        ),
+        const SizedBox(width: 8),
+        _buildActionChip(
+          context,
+          icon: _isSharing ? null : 
+          Icons.share_rounded,
+          label: 'Compartir',
+          color: AppColors.accent,
+          loading: _isSharing,
+          onTap: _isSharing ? null : _shareViaWhatsApp,
+        ),
+        const SizedBox(width: 8),
+        _buildActionChip(
+          context,
+          icon: Icons.download_rounded,
+          label: 'Descargar',
+          color: AppColors.primary,
+          loading: false,
+          onTap: _downloadVideo,
+        ),
+      ],
     );
   }
 
-  Widget _buildUnsupportedChips(List<String> unsupported) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(0.08), borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.warning.withOpacity(0.3)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 16),
-          const SizedBox(width: 8),
-          Expanded(child: Text('Sin seña disponible: ${unsupported.join(', ')}',
-              style: TextStyle(fontSize: 11, color: AppColors.warning))),
-        ],
+  Widget _buildActionChip(
+    BuildContext context, {
+    required IconData? icon,
+    required String label,
+    required Color color,
+    required bool loading,
+    required VoidCallback? onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(onTap != null ? 0.10 : 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(onTap != null ? 0.25 : 0.12)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (loading)
+                SizedBox(
+                  width: 14, height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                )
+              else if (icon != null)
+                Icon(icon, size: 14, color: onTap != null ? color : context.textSecondary),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: onTap != null ? color : context.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

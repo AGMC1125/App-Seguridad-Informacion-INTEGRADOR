@@ -1,39 +1,48 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-// ── Paleta de colores ─────────────────────────────────────────────────────────
+// ── Paleta AprendIA — extraída del landing en producción ─────────────────────
+//   Cyan principal : #00C2E0  (brand cyan del landing)
+//   Cyan oscuro    : #0099B3  (hover/énfasis)
+//   Cyan suave     : #E0F8FF  (containers light)
+//   Navy dark      : #012E46  (surface dark del landing)
+//   Bg dark        : #020F18  (fondo dark del landing)
+//   Acento verde   : #06D6A0  (complementario, acciones exitosas)
 
 class AppColors {
   AppColors._();
 
-  // Brand (invariante en ambos temas)
-  static const Color primary     = Color(0xFF4F8EF7);
-  static const Color primaryDark = Color(0xFF2563EB);
-  static const Color accent      = Color(0xFF06D6A0);
+  // ── Brand (invariante) ────────────────────────────────────────────────────
+  static const Color primary     = Color(0xFF00A8C8); // cyan equilibrado
+  static const Color primaryDark = Color(0xFF0099B3); // cyan más profundo
+  static const Color primaryBright = Color(0xFF00C2E0); // cyan del landing
+  static const Color accent      = Color(0xFF06D6A0); // verde complementario
   static const Color error       = Color(0xFFEF4444);
   static const Color success     = Color(0xFF10B981);
   static const Color warning     = Color(0xFFF59E0B);
 
   // ── Tema claro ────────────────────────────────────────────────────────────
-  static const Color lightBackground      = Color(0xFFF0F4FF);
-  static const Color lightSurface         = Color(0xFFFFFFFF);
-  static const Color lightSurfaceVariant  = Color(0xFFEEF3FF);
-  static const Color lightTextPrimary     = Color(0xFF0F172A);
-  static const Color lightTextSecondary   = Color(0xFF64748B);
-  static const Color lightTextHint        = Color(0xFFB0B7C3);
-  static const Color lightDivider         = Color(0xFFE2E8F0);
-  static const Color lightPrimaryContainer= Color(0xFFDCEAFF);
+  static const Color lightBackground     = Color(0xFFF0FAFD); // muy suave cyan-blanco
+  static const Color lightSurface        = Color(0xFFFFFFFF);
+  static const Color lightSurfaceVariant = Color(0xFFE8F7FB);
+  static const Color lightTextPrimary    = Color(0xFF0B2233); // navy oscuro del landing
+  static const Color lightTextSecondary  = Color(0xFF546E7A);
+  static const Color lightTextHint       = Color(0xFFB0BEC5);
+  static const Color lightDivider        = Color(0xFFDEEFF4);
+  static const Color lightPrimaryContainer = Color(0xFFCDF2FA); // cyan suave
 
-  // ── Tema oscuro ───────────────────────────────────────────────────────────
-  static const Color darkBackground      = Color(0xFF080E1A);
-  static const Color darkSurface         = Color(0xFF0D1B3E);
-  static const Color darkSurfaceVariant  = Color(0xFF121F40);
-  static const Color darkTextPrimary     = Color(0xFFE2E8F0);
-  static const Color darkTextSecondary   = Color(0xFF94A3B8);
-  static const Color darkTextHint        = Color(0xFF475569);
-  static const Color darkDivider         = Color(0xFF1E2D55);
-  static const Color darkPrimaryContainer= Color(0xFF1A2E60);
+  // ── Tema oscuro (basado EXACTAMENTE en el landing de producción) ──────────
+  static const Color darkBackground     = Color(0xFF020F18); // --bg del landing
+  static const Color darkSurface        = Color(0xFF012E46); // --navy del landing
+  static const Color darkSurfaceVariant = Color(0xFF024466); // --navy-mid del landing
+  static const Color darkTextPrimary    = Color(0xFFE8F4F8);
+  static const Color darkTextSecondary  = Color(0xFF8A9AAA); // --gray del landing
+  static const Color darkTextHint       = Color(0xFF4A6070);
+  static const Color darkDivider        = Color(0xFF0D3A52); // border del landing
+  static const Color darkPrimaryContainer = Color(0xFF013550);
 
-  // ── Alias retrocompatibles (apuntan al tema claro) ────────────────────────
+  // ── Alias retrocompatibles ────────────────────────────────────────────────
   static const Color background    = lightBackground;
   static const Color surface       = lightSurface;
   static const Color primaryLight  = lightSurfaceVariant;
@@ -44,11 +53,14 @@ class AppColors {
   static const Color textSecondary = lightTextSecondary;
   static const Color textHint      = lightTextHint;
   static const Color divider       = lightDivider;
-  // Dark aliases (login / register siempre oscuro)
   static const Color darkBg            = darkBackground;
   static const Color darkBgSurface     = darkSurface;
   static const Color darkText          = darkTextPrimary;
   static const Color darkTextSecondaryAlias = darkTextSecondary;
+
+  // ── Clay+Glass design colors ──────────────────────────────────────────────
+  static const Color violet     = Color(0xFF7C3AED);
+  static const Color violetDark = Color(0xFF5B21B6);
 }
 
 // ── Extension para acceso rápido desde BuildContext ───────────────────────────
@@ -57,7 +69,6 @@ extension AppThemeExtension on BuildContext {
   ColorScheme get cs      => Theme.of(this).colorScheme;
   bool         get isDark => Theme.of(this).brightness == Brightness.dark;
 
-  // Atajos semánticos
   Color get bgColor        => cs.surface;
   Color get cardColor      => isDark ? AppColors.darkSurface       : AppColors.lightSurface;
   Color get cardVariant    => isDark ? AppColors.darkSurfaceVariant : AppColors.lightSurfaceVariant;
@@ -84,10 +95,10 @@ class AppTheme {
       onSecondary:        Colors.white,
       secondaryContainer: Color(0xFFCCF5EB),
       onSecondaryContainer: Color(0xFF004D38),
-      tertiary:           Color(0xFF7C3AED),
+      tertiary:           Color(0xFF0077A0),
       onTertiary:         Colors.white,
-      tertiaryContainer:  Color(0xFFEDE9FE),
-      onTertiaryContainer: Color(0xFF4C1D95),
+      tertiaryContainer:  Color(0xFFCBEEF8),
+      onTertiaryContainer: Color(0xFF003D55),
       error:              AppColors.error,
       onError:            Colors.white,
       errorContainer:     Color(0xFFFFE4E6),
@@ -97,12 +108,12 @@ class AppTheme {
       surfaceVariant:     AppColors.lightSurfaceVariant,
       onSurfaceVariant:   AppColors.lightTextSecondary,
       outline:            AppColors.lightDivider,
-      outlineVariant:     Color(0xFFCDD5E0),
+      outlineVariant:     Color(0xFFCDE8F0),
       shadow:             Colors.black,
       scrim:              Colors.black,
       inverseSurface:     AppColors.darkSurface,
       onInverseSurface:   AppColors.darkTextPrimary,
-      inversePrimary:     Color(0xFF93BBFF),
+      inversePrimary:     AppColors.primaryBright,
     );
 
     return ThemeData(
@@ -110,6 +121,12 @@ class AppTheme {
       colorScheme: cs,
       scaffoldBackgroundColor: AppColors.lightBackground,
       fontFamily: 'Roboto',
+      appBarTheme: const AppBarTheme(
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+        ),
+      ),
       cardTheme: CardThemeData(
         color: AppColors.lightSurface,
         elevation: 0,
@@ -151,38 +168,38 @@ class AppTheme {
           foregroundColor: Colors.white,
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.3),
           elevation: 0,
         ),
       ),
       textTheme: const TextTheme(
-        headlineLarge:  TextStyle(fontSize: 28, fontWeight: FontWeight.bold,  color: AppColors.lightTextPrimary, letterSpacing: -0.5),
-        headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.bold,  color: AppColors.lightTextPrimary),
-        titleLarge:     TextStyle(fontSize: 18, fontWeight: FontWeight.w700,  color: AppColors.lightTextPrimary),
-        titleMedium:    TextStyle(fontSize: 16, fontWeight: FontWeight.w600,  color: AppColors.lightTextPrimary),
-        bodyLarge:      TextStyle(fontSize: 16, color: AppColors.lightTextPrimary),
-        bodyMedium:     TextStyle(fontSize: 14, color: AppColors.lightTextSecondary),
-        labelLarge:     TextStyle(fontSize: 16, fontWeight: FontWeight.w600,  letterSpacing: 0.5),
+        headlineLarge:  TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.lightTextPrimary, letterSpacing: -0.5),
+        headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.lightTextPrimary, letterSpacing: -0.3),
+        titleLarge:     TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.lightTextPrimary),
+        titleMedium:    TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.lightTextPrimary),
+        bodyLarge:      TextStyle(fontSize: 16, color: AppColors.lightTextPrimary, height: 1.6),
+        bodyMedium:     TextStyle(fontSize: 14, color: AppColors.lightTextSecondary, height: 1.5),
+        labelLarge:     TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.3),
       ),
     );
   }
 
-  // ── Tema OSCURO ───────────────────────────────────────────────────────────
+  // ── Tema OSCURO (idéntico al landing de producción) ───────────────────────
   static ThemeData get darkTheme {
     const cs = ColorScheme(
       brightness: Brightness.dark,
-      primary:            AppColors.primary,
-      onPrimary:          Colors.white,
+      primary:            AppColors.primaryBright,
+      onPrimary:          Color(0xFF020F18),
       primaryContainer:   AppColors.darkPrimaryContainer,
-      onPrimaryContainer: Color(0xFF93BBFF),
+      onPrimaryContainer: AppColors.primaryBright,
       secondary:          AppColors.accent,
       onSecondary:        Color(0xFF003828),
       secondaryContainer: Color(0xFF00523A),
       onSecondaryContainer: Color(0xFF9DFAD8),
-      tertiary:           Color(0xFFA78BFA),
-      onTertiary:         Color(0xFF2E1065),
-      tertiaryContainer:  Color(0xFF3B0D8F),
-      onTertiaryContainer: Color(0xFFEDE9FE),
+      tertiary:           Color(0xFF00C2E0),
+      onTertiary:         Color(0xFF003344),
+      tertiaryContainer:  Color(0xFF013550),
+      onTertiaryContainer: Color(0xFF80E8FF),
       error:              Color(0xFFFF6B6B),
       onError:            Color(0xFF690005),
       errorContainer:     Color(0xFF93000A),
@@ -192,7 +209,7 @@ class AppTheme {
       surfaceVariant:     AppColors.darkSurfaceVariant,
       onSurfaceVariant:   AppColors.darkTextSecondary,
       outline:            AppColors.darkDivider,
-      outlineVariant:     Color(0xFF1A2A50),
+      outlineVariant:     Color(0xFF0A2A3E),
       shadow:             Colors.black,
       scrim:              Colors.black,
       inverseSurface:     AppColors.lightSurface,
@@ -206,6 +223,12 @@ class AppTheme {
       colorScheme: cs,
       scaffoldBackgroundColor: AppColors.darkBackground,
       fontFamily: 'Roboto',
+      appBarTheme: const AppBarTheme(
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+        ),
+      ),
       cardTheme: CardThemeData(
         color: AppColors.darkSurface,
         elevation: 0,
@@ -229,7 +252,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
+          borderSide: const BorderSide(color: AppColors.primaryBright, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -239,22 +262,163 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
+          backgroundColor: AppColors.primaryBright,
+          foregroundColor: const Color(0xFF020F18),
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.3),
           elevation: 0,
         ),
       ),
       textTheme: const TextTheme(
-        headlineLarge:  TextStyle(fontSize: 28, fontWeight: FontWeight.bold,  color: AppColors.darkTextPrimary, letterSpacing: -0.5),
-        headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.bold,  color: AppColors.darkTextPrimary),
-        titleLarge:     TextStyle(fontSize: 18, fontWeight: FontWeight.w700,  color: AppColors.darkTextPrimary),
-        titleMedium:    TextStyle(fontSize: 16, fontWeight: FontWeight.w600,  color: AppColors.darkTextPrimary),
-        bodyLarge:      TextStyle(fontSize: 16, color: AppColors.darkTextPrimary),
-        bodyMedium:     TextStyle(fontSize: 14, color: AppColors.darkTextSecondary),
-        labelLarge:     TextStyle(fontSize: 16, fontWeight: FontWeight.w600,  letterSpacing: 0.5),
+        headlineLarge:  TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.darkTextPrimary, letterSpacing: -0.5),
+        headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.darkTextPrimary, letterSpacing: -0.3),
+        titleLarge:     TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.darkTextPrimary),
+        titleMedium:    TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.darkTextPrimary),
+        bodyLarge:      TextStyle(fontSize: 16, color: AppColors.darkTextPrimary, height: 1.6),
+        bodyMedium:     TextStyle(fontSize: 14, color: AppColors.darkTextSecondary, height: 1.5),
+        labelLarge:     TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.3),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gradientes globales
+// ─────────────────────────────────────────────────────────────────────────────
+
+class AppGradients {
+  static const LinearGradient dark = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF06091A), Color(0xFF03080F), Color(0xFF080518)],
+    stops: [0.0, 0.55, 1.0],
+  );
+  static const LinearGradient light = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFEBF7FF), Color(0xFFF6F2FF), Color(0xFFEAFDF5)],
+    stops: [0.0, 0.5, 1.0],
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Glassmorphism helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+class AppGlass {
+  static BoxDecoration decoration({
+    double opacity = 0.08,
+    double borderOpacity = 0.14,
+    double radius = 20,
+    Color tint = Colors.white,
+  }) {
+    return BoxDecoration(
+      color: tint.withOpacity(opacity),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: tint.withOpacity(borderOpacity), width: 1.5),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.08),
+          blurRadius: 20,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    );
+  }
+
+  static BackdropFilter blur({
+    double sigmaX = 16,
+    double sigmaY = 16,
+    required Widget child,
+  }) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
+      child: child,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Claymorphism shadows helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+class AppClay {
+  static List<BoxShadow> shadows(Color color, {required bool isDark}) {
+    if (isDark) {
+      return [
+        BoxShadow(
+          color: color.withOpacity(0.30),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
+          spreadRadius: -2,
+        ),
+        BoxShadow(
+          color: Colors.black.withOpacity(0.35),
+          blurRadius: 24,
+          offset: const Offset(0, 10),
+        ),
+      ];
+    } else {
+      return [
+        BoxShadow(
+          color: color.withOpacity(0.25),
+          blurRadius: 14,
+          offset: const Offset(0, 5),
+          spreadRadius: -2,
+        ),
+        const BoxShadow(
+          color: Color(0x33FFFFFF),
+          blurRadius: 4,
+          offset: Offset(-2, -2),
+        ),
+      ];
+    }
+  }
+
+  static BoxDecoration light(Color color) => BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: shadows(color, isDark: false),
+      );
+
+  static BoxDecoration dark(Color color) => BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: shadows(color, isDark: true),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Decorative background blob (blurred circle for depth)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class AppBlob extends StatelessWidget {
+  final double size;
+  final Color color;
+  final double opacity;
+
+  const AppBlob({
+    super.key,
+    required this.size,
+    required this.color,
+    this.opacity = 0.15,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(opacity),
+            blurRadius: size * 0.8,
+            spreadRadius: size * 0.1,
+          ),
+        ],
       ),
     );
   }

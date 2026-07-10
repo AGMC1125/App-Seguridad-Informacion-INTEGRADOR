@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/session_provider.dart';
@@ -91,19 +92,31 @@ class _LoginScreenState extends State<LoginScreen> {
   // ── Widgets de UI ─────────────────────────────────────────────────────────
 
   Widget _buildBackground() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0, -0.4),
-          radius: 1.3,
-          colors: [
-            Color(0xFF0D1B3E),
-            Color(0xFF080E1A),
-            Color(0xFF04070F),
-          ],
-          stops: [0.0, 0.55, 1.0],
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF060918), Color(0xFF030810), Color(0xFF08051A)],
+              stops: [0.0, 0.55, 1.0],
+            ),
+          ),
         ),
-      ),
+        const Positioned(
+          top: -60, right: -40,
+          child: AppBlob(size: 280, color: AppColors.primary, opacity: 0.10),
+        ),
+        const Positioned(
+          bottom: 80, left: -60,
+          child: AppBlob(size: 300, color: AppColors.violet, opacity: 0.08),
+        ),
+        const Positioned(
+          top: 200, right: 30,
+          child: AppBlob(size: 160, color: AppColors.accent, opacity: 0.06),
+        ),
+      ],
     );
   }
 
@@ -174,22 +187,32 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildFormCard() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.045),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.09),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.45),
-            blurRadius: 48,
-            offset: const Offset(0, 12),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.14),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.45),
+                blurRadius: 48,
+                offset: const Offset(0, 12),
+              ),
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.06),
+                blurRadius: 32,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
       child: Form(
         key: _formKey,
         child: Column(
@@ -316,7 +339,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
       ),
-    );
+        ), // Container
+      ), // BackdropFilter
+    ); // ClipRRect
   }
 
   // ── Helpers de campos y botones ───────────────────────────────────────────

@@ -60,22 +60,22 @@ class SensitiveDataService {
   static List<SensitiveField> get fieldDescriptions => const [
         SensitiveField(
           key: 'correo electrónico',
-          icon: '📧',
+          icon: 'email',
           classification: 'Ultra-confidencial',
         ),
         SensitiveField(
           key: 'nombre completo',
-          icon: '👤',
+          icon: 'person',
           classification: 'Ultra-confidencial',
         ),
         SensitiveField(
           key: 'token FCM (dispositivo)',
-          icon: '🔔',
+          icon: 'notifications',
           classification: 'Ultra-confidencial',
         ),
         SensitiveField(
           key: 'región geográfica',
-          icon: '📍',
+          icon: 'location',
           classification: 'Confidencial',
         ),
       ];

@@ -10,8 +10,11 @@ class AppConstants {
   /// Tiempo antes del cierre en el que se muestra la advertencia al usuario.
   static const sessionWarningBefore = Duration(seconds: 30);
 
-  // API – Spring Boot desplegada en producción
-  static const apiBaseUrl = 'https://aprendia.angeldev.fun';
+  // API – Cambiar según entorno:
+  //   Dispositivo físico → IP de tu PC en la red (ej. http://192.168.1.X:8080)
+  //   Emulador Android  → http://10.0.2.2:8080
+  //   Producción        → https://aprendia.angeldev.fun
+  static const apiBaseUrl = 'http://192.168.1.75:8080';
 
   // --> Claves para almacén encriptado (datos de sesión)
 

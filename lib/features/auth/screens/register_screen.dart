@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/session_provider.dart';
 import '../../../theme/app_theme.dart';
 import 'privacy_policy_screen.dart';
+import 'terms_and_conditions_screen.dart';
 
 // ─── Particle painter (reutilizado del login) ─────────────────────────────────
 
@@ -74,6 +76,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _isLoading = false;
   bool _acceptTerms = false;
   late final TapGestureRecognizer _privacyTapRecognizer;
+  late final TapGestureRecognizer _termsTapRecognizer;
 
   // ── Estado de visibilidad de contraseñas ─────────────────────────────────
   bool _obscurePassword = true;
@@ -97,8 +100,15 @@ class _RegisterScreenState extends State<RegisterScreen>
       ..onTap = () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-              builder: (_) => const PrivacyPolicyScreen()),
+          MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+        );
+      };
+
+    _termsTapRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TermsAndConditionsScreen()),
         );
       };
 
@@ -123,6 +133,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   @override
   void dispose() {
     _privacyTapRecognizer.dispose();
+    _termsTapRecognizer.dispose();
     _particleCtrl.dispose();
     _nameController.dispose();
     _emailController.dispose();
@@ -228,19 +239,31 @@ class _RegisterScreenState extends State<RegisterScreen>
   // ── Widgets ───────────────────────────────────────────────────────────────
 
   Widget _buildBackground() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0, -0.5),
-          radius: 1.3,
-          colors: [
-            Color(0xFF0D1B3E),
-            Color(0xFF080E1A),
-            Color(0xFF04070F),
-          ],
-          stops: [0.0, 0.55, 1.0],
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF060918), Color(0xFF030810), Color(0xFF08051A)],
+              stops: [0.0, 0.55, 1.0],
+            ),
+          ),
         ),
-      ),
+        const Positioned(
+          top: -50, left: -60,
+          child: AppBlob(size: 260, color: AppColors.violet, opacity: 0.09),
+        ),
+        const Positioned(
+          bottom: 60, right: -50,
+          child: AppBlob(size: 280, color: AppColors.primary, opacity: 0.08),
+        ),
+        const Positioned(
+          top: 180, left: 30,
+          child: AppBlob(size: 140, color: AppColors.accent, opacity: 0.06),
+        ),
+      ],
     );
   }
 
@@ -350,20 +373,29 @@ class _RegisterScreenState extends State<RegisterScreen>
   }
 
   Widget _buildFormCard() {
-    return Container(
-      padding: const EdgeInsets.all(26),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.045),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.09)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.45),
-            blurRadius: 48,
-            offset: const Offset(0, 12),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: const EdgeInsets.all(26),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withOpacity(0.14), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.45),
+                blurRadius: 48,
+                offset: const Offset(0, 12),
+              ),
+              BoxShadow(
+                color: AppColors.violet.withOpacity(0.06),
+                blurRadius: 32,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
       child: Form(
         key: _formKey,
         child: Column(
@@ -503,6 +535,8 @@ class _RegisterScreenState extends State<RegisterScreen>
           ],
         ),
       ),
+    ),
+    ),
     );
   }
 
@@ -547,12 +581,15 @@ class _RegisterScreenState extends State<RegisterScreen>
               style: TextStyle(
                   color: Colors.white.withOpacity(0.45), fontSize: 13),
               children: [
-                const TextSpan(
+                TextSpan(
                   text: 'Términos y condiciones',
-                  style: TextStyle(
+                  recognizer: _termsTapRecognizer,
+                  style: const TextStyle(
                     color: Color(0xFF4F8EF7),
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
+                    decoration: TextDecoration.underline,
+                    decorationColor: Color(0xFF4F8EF7),
                   ),
                 ),
                 const TextSpan(text: ' y la '),
