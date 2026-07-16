@@ -1,15 +1,15 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../core/providers/session_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../features/auth/presentation/providers/session_notifier.dart';
 import '../theme/app_theme.dart';
-import '../features/profile/screens/profile_screen.dart';
-import '../features/auth/screens/terms_and_conditions_screen.dart';
-import '../features/auth/screens/privacy_policy_screen.dart';
+import '../features/profile/presentation/profile_screen.dart';
+import '../features/auth/presentation/screens/terms_and_conditions_screen.dart';
+import '../features/auth/presentation/screens/privacy_policy_screen.dart';
 
 /// Sidebar deslizante con efecto glassmorphism.
 /// Contiene: info del usuario, perfil, datos de seguridad, cerrar sesión.
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends ConsumerWidget {
   final VoidCallback onShowSensitiveData;
   final VoidCallback onLogout;
 
@@ -20,8 +20,8 @@ class AppDrawer extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final session = context.watch<SessionProvider>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(sessionNotifierProvider);
     final isDark = context.isDark;
     final screenW = MediaQuery.of(context).size.width;
     final drawerWidth = (screenW > 420 ? 300.0 : screenW * 0.82).clamp(260.0, 340.0);
@@ -137,7 +137,7 @@ class AppDrawer extends StatelessWidget {
                           isDark: isDark,
                           icon: Icons.info_outline_rounded,
                           label: 'Acerca de',
-                          subtitle: 'VirtualSign LSM · Universidad del Pacífico',
+                          subtitle: 'VirtualSign LSM · Universidad Politécnica de Chiapas',
                           color: AppColors.accent,
                           onTap: () => Navigator.pop(context),
                         ),
