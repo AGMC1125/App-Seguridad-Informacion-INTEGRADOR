@@ -2,64 +2,64 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-// ── Paleta AprendIA — extraída del landing en producción ─────────────────────
-//   Cyan principal : #00C2E0  (brand cyan del landing)
-//   Cyan oscuro    : #0099B3  (hover/énfasis)
-//   Cyan suave     : #E0F8FF  (containers light)
-//   Navy dark      : #012E46  (surface dark del landing)
-//   Bg dark        : #020F18  (fondo dark del landing)
-//   Acento verde   : #06D6A0  (complementario, acciones exitosas)
+// ── Paleta AprendIA — extraída del landing en producción 
+//   Rosa/Magenta principal : #D81B60  (rosa magenta del logo y botones)
+//   Rosa oscuro            : #C2185B  (hover/énfasis)
+//   Rosa brillante         : #E91E8C  (variante brillante y acento secundario)
+//   Rosa suave             : #FFE4EE  (containers light)
+//   Navy dark              : #1A0814  (superficie dark — tinte cálido)
+//   Bg dark                : #100510  (fondo dark — tinte cálido)
 
 class AppColors {
   AppColors._();
 
   // ── Brand (invariante) ────────────────────────────────────────────────────
-  static const Color primary     = Color(0xFF00A8C8); // cyan equilibrado
-  static const Color primaryDark = Color(0xFF0099B3); // cyan más profundo
-  static const Color primaryBright = Color(0xFF00C2E0); // cyan del landing
-  static const Color accent      = Color(0xFF06D6A0); // verde complementario
-  static const Color error       = Color(0xFFEF4444);
-  static const Color success     = Color(0xFF10B981);
-  static const Color warning     = Color(0xFFF59E0B);
+  static const Color primary      = Color(0xFFD81B60); // rosa magenta del landing
+  static const Color primaryDark  = Color(0xFFC2185B); // rosa más profundo
+  static const Color primaryBright= Color(0xFFE91E8C); // rosa brillante (dark mode)
+  static const Color accent       = Color(0xFFE91E8C); // rosa brillante (acento secundario)
+  static const Color error        = Color(0xFFEF4444);
+  static const Color success      = Color(0xFF10B981);
+  static const Color warning      = Color(0xFFF59E0B);
 
   // ── Tema claro ────────────────────────────────────────────────────────────
-  static const Color lightBackground     = Color(0xFFF0FAFD); // muy suave cyan-blanco
-  static const Color lightSurface        = Color(0xFFFFFFFF);
-  static const Color lightSurfaceVariant = Color(0xFFE8F7FB);
-  static const Color lightTextPrimary    = Color(0xFF0B2233); // navy oscuro del landing
-  static const Color lightTextSecondary  = Color(0xFF546E7A);
-  static const Color lightTextHint       = Color(0xFFB0BEC5);
-  static const Color lightDivider        = Color(0xFFDEEFF4);
-  static const Color lightPrimaryContainer = Color(0xFFCDF2FA); // cyan suave
+  static const Color lightBackground      = Color(0xFFFFFFFF); // blanco puro
+  static const Color lightSurface         = Color(0xFFFFFFFF);
+  static const Color lightSurfaceVariant  = Color(0xFFF5F5F5); // gris muy suave
+  static const Color lightTextPrimary     = Color(0xFF111827); // negro neutro
+  static const Color lightTextSecondary   = Color(0xFF6B7280); // gris neutro
+  static const Color lightTextHint        = Color(0xFFB0B0B0);
+  static const Color lightDivider         = Color(0xFFE8E8E8); // divisor gris neutro
+  static const Color lightPrimaryContainer= Color(0xFFFFE4EE); // container rosa suave (solo para chips/badges)
 
-  // ── Tema oscuro (basado EXACTAMENTE en el landing de producción) ──────────
-  static const Color darkBackground     = Color(0xFF020F18); // --bg del landing
-  static const Color darkSurface        = Color(0xFF012E46); // --navy del landing
-  static const Color darkSurfaceVariant = Color(0xFF024466); // --navy-mid del landing
-  static const Color darkTextPrimary    = Color(0xFFE8F4F8);
-  static const Color darkTextSecondary  = Color(0xFF8A9AAA); // --gray del landing
-  static const Color darkTextHint       = Color(0xFF4A6070);
-  static const Color darkDivider        = Color(0xFF0D3A52); // border del landing
-  static const Color darkPrimaryContainer = Color(0xFF013550);
+  // ── Tema oscuro ───────────────────────────────────────────────────────────
+  static const Color darkBackground      = Color(0xFF100510); // negro con tinte cálido
+  static const Color darkSurface         = Color(0xFF200A1A); // superficie oscura cálida
+  static const Color darkSurfaceVariant  = Color(0xFF2E0F24); // variante oscura
+  static const Color darkTextPrimary     = Color(0xFFF8EBF2); // blanco cálido
+  static const Color darkTextSecondary   = Color(0xFFAA8898); // gris cálido
+  static const Color darkTextHint        = Color(0xFF6A3A52);
+  static const Color darkDivider         = Color(0xFF3D0F28); // borde oscuro
+  static const Color darkPrimaryContainer= Color(0xFF3D0F28);
 
   // ── Alias retrocompatibles ────────────────────────────────────────────────
-  static const Color background    = lightBackground;
-  static const Color surface       = lightSurface;
-  static const Color primaryLight  = lightSurfaceVariant;
-  static const Color secondary     = accent;
-  static const Color secondaryLight= Color(0xFFE6FAF5);
-  static const Color accentLight   = Color(0xFFE6FAF5);
-  static const Color textPrimary   = lightTextPrimary;
-  static const Color textSecondary = lightTextSecondary;
-  static const Color textHint      = lightTextHint;
-  static const Color divider       = lightDivider;
-  static const Color darkBg            = darkBackground;
-  static const Color darkBgSurface     = darkSurface;
-  static const Color darkText          = darkTextPrimary;
+  static const Color background         = lightBackground;
+  static const Color surface            = lightSurface;
+  static const Color primaryLight       = lightSurfaceVariant;
+  static const Color secondary          = accent;
+  static const Color secondaryLight     = Color(0xFFFFE4EE);
+  static const Color accentLight        = Color(0xFFFFE4EE);
+  static const Color textPrimary        = lightTextPrimary;
+  static const Color textSecondary      = lightTextSecondary;
+  static const Color textHint           = lightTextHint;
+  static const Color divider            = lightDivider;
+  static const Color darkBg             = darkBackground;
+  static const Color darkBgSurface      = darkSurface;
+  static const Color darkText           = darkTextPrimary;
   static const Color darkTextSecondaryAlias = darkTextSecondary;
 
   // ── Clay+Glass design colors ──────────────────────────────────────────────
-  static const Color violet     = Color(0xFF7C3AED);
+  static const Color violet     = Color(0xFF7C3AED); // púrpura — contraste con el rosa
   static const Color violetDark = Color(0xFF5B21B6);
 }
 
@@ -87,33 +87,33 @@ class AppTheme {
   static ThemeData get lightTheme {
     const cs = ColorScheme(
       brightness: Brightness.light,
-      primary:            AppColors.primary,
-      onPrimary:          Colors.white,
-      primaryContainer:   AppColors.lightPrimaryContainer,
-      onPrimaryContainer: AppColors.primaryDark,
-      secondary:          AppColors.accent,
-      onSecondary:        Colors.white,
-      secondaryContainer: Color(0xFFCCF5EB),
-      onSecondaryContainer: Color(0xFF004D38),
-      tertiary:           Color(0xFF0077A0),
-      onTertiary:         Colors.white,
-      tertiaryContainer:  Color(0xFFCBEEF8),
-      onTertiaryContainer: Color(0xFF003D55),
-      error:              AppColors.error,
-      onError:            Colors.white,
-      errorContainer:     Color(0xFFFFE4E6),
-      onErrorContainer:   Color(0xFF9B1C1C),
-      surface:            AppColors.lightSurface,
-      onSurface:          AppColors.lightTextPrimary,
-      surfaceVariant:     AppColors.lightSurfaceVariant,
-      onSurfaceVariant:   AppColors.lightTextSecondary,
-      outline:            AppColors.lightDivider,
-      outlineVariant:     Color(0xFFCDE8F0),
-      shadow:             Colors.black,
-      scrim:              Colors.black,
-      inverseSurface:     AppColors.darkSurface,
-      onInverseSurface:   AppColors.darkTextPrimary,
-      inversePrimary:     AppColors.primaryBright,
+      primary:              AppColors.primary,
+      onPrimary:            Colors.white,
+      primaryContainer:     AppColors.lightPrimaryContainer,
+      onPrimaryContainer:   AppColors.primaryDark,
+      secondary:            AppColors.accent,
+      onSecondary:          Colors.white,
+      secondaryContainer:   Color(0xFFFFD6E7),
+      onSecondaryContainer: Color(0xFF880E4F),
+      tertiary:             Color(0xFFC2185B),
+      onTertiary:           Colors.white,
+      tertiaryContainer:    Color(0xFFFFE0EC),
+      onTertiaryContainer:  Color(0xFF880E4F),
+      error:                AppColors.error,
+      onError:              Colors.white,
+      errorContainer:       Color(0xFFFFE4E6),
+      onErrorContainer:     Color(0xFF9B1C1C),
+      surface:              AppColors.lightSurface,
+      onSurface:            AppColors.lightTextPrimary,
+      surfaceVariant:       AppColors.lightSurfaceVariant,
+      onSurfaceVariant:     AppColors.lightTextSecondary,
+      outline:              AppColors.lightDivider,
+      outlineVariant:       Color(0xFFFFCCDE),
+      shadow:               Colors.black,
+      scrim:                Colors.black,
+      inverseSurface:       AppColors.darkSurface,
+      onInverseSurface:     AppColors.darkTextPrimary,
+      inversePrimary:       AppColors.primaryBright,
     );
 
     return ThemeData(
@@ -184,37 +184,37 @@ class AppTheme {
     );
   }
 
-  // ── Tema OSCURO (idéntico al landing de producción) ───────────────────────
+  // ── Tema OSCURO ───────────────────────────────────────────────────────────
   static ThemeData get darkTheme {
     const cs = ColorScheme(
       brightness: Brightness.dark,
-      primary:            AppColors.primaryBright,
-      onPrimary:          Color(0xFF020F18),
-      primaryContainer:   AppColors.darkPrimaryContainer,
-      onPrimaryContainer: AppColors.primaryBright,
-      secondary:          AppColors.accent,
-      onSecondary:        Color(0xFF003828),
-      secondaryContainer: Color(0xFF00523A),
-      onSecondaryContainer: Color(0xFF9DFAD8),
-      tertiary:           Color(0xFF00C2E0),
-      onTertiary:         Color(0xFF003344),
-      tertiaryContainer:  Color(0xFF013550),
-      onTertiaryContainer: Color(0xFF80E8FF),
-      error:              Color(0xFFFF6B6B),
-      onError:            Color(0xFF690005),
-      errorContainer:     Color(0xFF93000A),
-      onErrorContainer:   Color(0xFFFFDAD6),
-      surface:            AppColors.darkSurface,
-      onSurface:          AppColors.darkTextPrimary,
-      surfaceVariant:     AppColors.darkSurfaceVariant,
-      onSurfaceVariant:   AppColors.darkTextSecondary,
-      outline:            AppColors.darkDivider,
-      outlineVariant:     Color(0xFF0A2A3E),
-      shadow:             Colors.black,
-      scrim:              Colors.black,
-      inverseSurface:     AppColors.lightSurface,
-      onInverseSurface:   AppColors.lightTextPrimary,
-      inversePrimary:     AppColors.primaryDark,
+      primary:              AppColors.primaryBright,
+      onPrimary:            Color(0xFF100510),
+      primaryContainer:     AppColors.darkPrimaryContainer,
+      onPrimaryContainer:   AppColors.primaryBright,
+      secondary:            AppColors.accent,
+      onSecondary:          Color(0xFF3D0027),
+      secondaryContainer:   Color(0xFF5C0038),
+      onSecondaryContainer: Color(0xFFFFD9E3),
+      tertiary:             Color(0xFFFF6EB0),
+      onTertiary:           Color(0xFF3D0027),
+      tertiaryContainer:    Color(0xFF5C0038),
+      onTertiaryContainer:  Color(0xFFFFD9E3),
+      error:                Color(0xFFFF6B6B),
+      onError:              Color(0xFF690005),
+      errorContainer:       Color(0xFF93000A),
+      onErrorContainer:     Color(0xFFFFDAD6),
+      surface:              AppColors.darkSurface,
+      onSurface:            AppColors.darkTextPrimary,
+      surfaceVariant:       AppColors.darkSurfaceVariant,
+      onSurfaceVariant:     AppColors.darkTextSecondary,
+      outline:              AppColors.darkDivider,
+      outlineVariant:       Color(0xFF2A0A1E),
+      shadow:               Colors.black,
+      scrim:                Colors.black,
+      inverseSurface:       AppColors.lightSurface,
+      onInverseSurface:     AppColors.lightTextPrimary,
+      inversePrimary:       AppColors.primaryDark,
     );
 
     return ThemeData(
@@ -263,7 +263,7 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primaryBright,
-          foregroundColor: const Color(0xFF020F18),
+          foregroundColor: const Color(0xFF100510),
           minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: 0.3),
@@ -291,13 +291,13 @@ class AppGradients {
   static const LinearGradient dark = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF06091A), Color(0xFF03080F), Color(0xFF080518)],
+    colors: [Color(0xFF100510), Color(0xFF0A030C), Color(0xFF180614)],
     stops: [0.0, 0.55, 1.0],
   );
   static const LinearGradient light = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFEBF7FF), Color(0xFFF6F2FF), Color(0xFFEAFDF5)],
+    colors: [Color(0xFFFFFFFF), Color(0xFFFAFAFA), Color(0xFFFFFFFF)],
     stops: [0.0, 0.5, 1.0],
   );
 }

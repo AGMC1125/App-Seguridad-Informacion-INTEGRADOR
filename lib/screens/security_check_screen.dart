@@ -4,7 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../core/services/security_service.dart';
 import '../theme/app_theme.dart';
-import '../features/auth/screens/login_screen.dart';
+import '../features/auth/presentation/screens/login_screen.dart';
 
 /// Pantalla de seguridad persistente que envuelve al [LoginScreen].
 ///

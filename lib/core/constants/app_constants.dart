@@ -14,7 +14,7 @@ class AppConstants {
   //   Dispositivo físico → IP de tu PC en la red (ej. http://192.168.1.X:8080)
   //   Emulador Android  → http://10.0.2.2:8080
   //   Producción        → https://aprendia.angeldev.fun
-  static const apiBaseUrl = 'http://192.168.1.75:8080';
+  static const apiBaseUrl = 'http://10.252.238.227:8080';
 
   // --> Claves para almacén encriptado (datos de sesión)
 
