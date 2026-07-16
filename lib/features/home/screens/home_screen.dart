@@ -1,969 +1,388 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:video_player/video_player.dart';
 import '../../../core/providers/session_provider.dart';
 import '../../../core/services/sensitive_data_service.dart';
-import '../../../core/services/signs_service.dart';
-import '../../../core/services/api_client.dart';
-import '../models/sign_result.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/app_drawer.dart';
+import 'generator_screen.dart';
+import '../../dictionary/screens/family_screen.dart';
+import '../../search/screens/search_screen.dart';
+import '../../history/screens/history_screen.dart';
+import '../../profile/screens/profile_screen.dart';
 
 // ---------------------------------------------------------------------------
-// Modelo de avatar
+// HomeScreen — hub principal de navegación
 // ---------------------------------------------------------------------------
 
-class _AvatarOption {
-  final String id;
-  final String emoji;
-  final String label;
-  final String description;
-  final Color color;
-
-  const _AvatarOption({
-    required this.id,
-    required this.emoji,
-    required this.label,
-    required this.description,
-    required this.color,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// HomeScreen
-// ---------------------------------------------------------------------------
-
-/// Pantalla principal de AprendIA.
-///
-/// Flujo principal:
-///   1. El usuario selecciona uno de los 4 avatares disponibles.
-///   2. Ingresa texto en español.
-///   3. Presiona "Generar" → la API devuelve videos LSM por cada letra/token.
-///   4. Se reproducen secuencialmente en el reproductor integrado.
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  // ---- Estado del flujo ----
-  int? _selectedAvatarIndex;
-  final _textController = TextEditingController();
-  bool _isGenerating = false;
-  String? _errorMessage;
-
-  // ---- Resultado de la API ----
-  SignResult? _result;
-
-  // ---- Reproductor de video ----
-  VideoPlayerController? _videoController;
-  int _currentVideoIndex = 0;
-  bool _videoLoading = false;
-
-  // ---- Avatares disponibles ----
-  // IMPORTANTE: los IDs coinciden con los AvatarType del API Spring Boot
-  static const List<_AvatarOption> _avatars = [
-    _AvatarOption(
-      id: 'nino',
-      emoji: '👦',
-      label: 'Niño',
-      description: 'Avatar infantil masculino',
-      color: Color(0xFF2563EB),
-    ),
-    _AvatarOption(
-      id: 'nina',
-      emoji: '👧',
-      label: 'Niña',
-      description: 'Avatar infantil femenino',
-      color: Color(0xFFDB2777),
-    ),
-    _AvatarOption(
-      id: 'hombre_adulto',
-      emoji: '👨',
-      label: 'Hombre adulto',
-      description: 'Avatar adulto masculino',
-      color: Color(0xFF059669),
-    ),
-    _AvatarOption(
-      id: 'mujer_adulta',
-      emoji: '👩',
-      label: 'Mujer adulta',
-      description: 'Avatar adulto femenino',
-      color: Color(0xFF7C3AED),
-    ),
-  ];
-
-  @override
-  void dispose() {
-    _textController.dispose();
-    _disposeVideoController();
-    super.dispose();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Video player helpers
-  // ---------------------------------------------------------------------------
-
-  Future<void> _loadVideo(int index) async {
-    if (_result == null || index >= _result!.videoUrls.length) return;
-
-    setState(() => _videoLoading = true);
-
-    await _disposeVideoController();
-
-    final url = SignsService.buildVideoUrl(_result!.videoUrls[index]);
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
-
-    try {
-      await controller.initialize();
-      controller.addListener(_onVideoProgress);
-      if (!mounted) {
-        controller.dispose();
-        return;
-      }
-      setState(() {
-        _videoController = controller;
-        _currentVideoIndex = index;
-        _videoLoading = false;
-      });
-      controller.play();
-    } catch (_) {
-      controller.dispose();
-      if (mounted) setState(() => _videoLoading = false);
-      // Si falla un video, avanzar al siguiente automáticamente
-      if (index + 1 < (_result?.videoUrls.length ?? 0)) {
-        await _loadVideo(index + 1);
-      }
-    }
-  }
-
-  void _onVideoProgress() {
-    final controller = _videoController;
-    if (controller == null) return;
-    final pos = controller.value.position;
-    final dur = controller.value.duration;
-    // Avanzar al siguiente video cuando termina el actual
-    if (dur.inMilliseconds > 0 && pos >= dur - const Duration(milliseconds: 200)) {
-      final next = _currentVideoIndex + 1;
-      if (next < (_result?.videoUrls.length ?? 0)) {
-        _loadVideo(next);
-      }
-    }
-  }
-
-  Future<void> _disposeVideoController() async {
-    final old = _videoController;
-    _videoController = null;
-    old?.removeListener(_onVideoProgress);
-    await old?.dispose();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Generar señas (llamada real a la API)
-  // ---------------------------------------------------------------------------
-
-  Future<void> _onGenerate() async {
-    final avatar = _avatars[_selectedAvatarIndex!];
-    final text = _textController.text.trim();
-
-    setState(() {
-      _isGenerating = true;
-      _errorMessage = null;
-      _result = null;
-    });
-
-    await _disposeVideoController();
-
-    try {
-      final result = await SignsService.generate(
-        text: text,
-        avatarCode: avatar.id,
-      );
-
-      if (!mounted) return;
-
-      if (result.videoUrls.isEmpty) {
-        setState(() {
-          _isGenerating = false;
-          _errorMessage = 'No se encontraron señas para el texto ingresado.';
-        });
-        return;
-      }
-
-      setState(() {
-        _result = result;
-        _isGenerating = false;
-      });
-
-      // Cargar y reproducir el primer video
-      await _loadVideo(0);
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isGenerating = false;
-        _errorMessage = e.message;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _isGenerating = false;
-        _errorMessage = 'No se pudo conectar con el servidor.';
-      });
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Build principal
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     final session = context.watch<SessionProvider>();
+    final isDark = context.isDark;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopBar(context, session),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 24),
-                    _buildWelcomeHeader(session.userEmail),
-                    const SizedBox(height: 20),
-                    _buildInfoBanner(),
-                    const SizedBox(height: 28),
-
-                    // ---- Paso 1: Avatar ----
-                    _buildStepLabel('1', 'Selecciona un avatar'),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'El avatar representará las señas en la animación generada',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+      backgroundColor: isDark ? const Color(0xFF06091A) : const Color(0xFFEBF7FF),
+      endDrawer: AppDrawer(
+        onShowSensitiveData: () => _showSensitiveDataSheet(context, session),
+        onLogout: () => _confirmLogout(context, session),
+      ),
+      // Scrim semitransparente al abrir el drawer
+      drawerScrimColor: Colors.black.withOpacity(0.45),
+      body: Stack(
+        children: [
+          // ── Fondo degradado ──────────────────────────────────────────────
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: isDark ? AppGradients.dark : AppGradients.light,
+              ),
+            ),
+          ),
+          // ── Blobs decorativos ────────────────────────────────────────────
+          Positioned(
+            top: -60,
+            right: -40,
+            child: AppBlob(size: 210, color: AppColors.primary, opacity: isDark ? 0.09 : 0.07),
+          ),
+          Positioned(
+            bottom: 120,
+            left: -70,
+            child: AppBlob(size: 240, color: AppColors.violet, opacity: isDark ? 0.07 : 0.05),
+          ),
+          Positioned(
+            top: 220,
+            right: 20,
+            child: AppBlob(size: 100, color: AppColors.accent, opacity: isDark ? 0.05 : 0.04),
+          ),
+          // ── Contenido principal ──────────────────────────────────────────
+          SafeArea(
+            child: Column(
+              children: [
+                Builder(
+                  builder: (ctx) => _buildTopBar(ctx, session, isDark),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 22),
+                        _buildWelcomeBanner(context, session.userName, session.userEmail, isDark),
+                        const SizedBox(height: 28),
+                        _buildSectionLabel(context, '¿QUÉ DESEAS HACER?', isDark),
+                        const SizedBox(height: 14),
+                        _buildOptionCard(
+                          context,
+                          isDark: isDark,
+                          icon: Icons.keyboard_alt_rounded,
+                          title: 'Generador de Señas',
+                          subtitle: 'Convierte texto en señas LSM letra por letra usando el abecedario dactilológico',
+                          primaryColor: AppColors.primary,
+                          gradientEnd: AppColors.primaryDark,
+                          badge: 'A – Z',
+                          onTap: () => Navigator.push(context, _route(const GeneratorScreen())),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildOptionCard(
+                          context,
+                          isDark: isDark,
+                          icon: Icons.menu_book_rounded,
+                          title: 'Diccionario LSM',
+                          subtitle: 'Explora el vocabulario por temas: familia, saludos y más',
+                          primaryColor: const Color(0xFF059669),
+                          gradientEnd: AppColors.accent,
+                          badge: '12 señas',
+                          onTap: () => Navigator.push(context, _route(const FamilyScreen())),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildOptionCard(
+                          context,
+                          isDark: isDark,
+                          icon: Icons.manage_search_rounded,
+                          title: 'Buscador',
+                          subtitle: 'Busca palabras con motor semántico BM25 en español',
+                          primaryColor: AppColors.violet,
+                          gradientEnd: const Color(0xFFA855F7),
+                          badge: 'BM25',
+                          onTap: () => Navigator.push(context, _route(const SearchScreen())),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildOptionCard(
+                          context,
+                          isDark: isDark,
+                          icon: Icons.history_rounded,
+                          title: 'Historial de videos',
+                          subtitle: 'Revisa, reproduce y comparte los videos generados anteriormente',
+                          primaryColor: const Color(0xFFD97706),
+                          gradientEnd: const Color(0xFFF59E0B),
+                          badge: 'MP4',
+                          onTap: () => Navigator.push(context, _route(const HistoryScreen())),
+                        ),
+                        const SizedBox(height: 28),
+                        _buildStatsRow(context, isDark),
+                      ],
                     ),
-                    const SizedBox(height: 14),
-                    _buildAvatarGrid(),
-                    const SizedBox(height: 28),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                    // ---- Paso 2: Texto ----
-                    _buildStepLabel('2', 'Escribe el texto'),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'El texto será deletreado letra a letra en Lengua de Señas Mexicana (LSM)',
-                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+  // ── Top bar con efecto glass ───────────────────────────────────────────────
+
+  Widget _buildTopBar(BuildContext context, SessionProvider session, bool isDark) {
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.black.withOpacity(0.22)
+                : Colors.white.withOpacity(0.55),
+            border: Border(
+              bottom: BorderSide(
+                color: isDark
+                    ? Colors.white.withOpacity(0.06)
+                    : AppColors.lightDivider.withOpacity(0.6),
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              // Logo
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'assets/images/logo-app.png',
+                  width: 34,
+                  height: 34,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'VirtualSign LSM',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                      letterSpacing: -0.3,
                     ),
-                    const SizedBox(height: 14),
-                    _buildTextInput(),
-                    const SizedBox(height: 8),
-                    _buildExampleChips(),
-                    const SizedBox(height: 24),
-
-                    // ---- Error ----
-                    if (_errorMessage != null) ...[
-                      _buildErrorBanner(_errorMessage!),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // ---- Botón generar ----
-                    _buildGenerateButton(),
-
-                    // ---- Paso 3: Resultado ----
-                    if (_result != null) ...[
-                      const SizedBox(height: 32),
-                      _buildStepLabel('3', 'Reproducción de señas'),
-                      const SizedBox(height: 14),
-                      _buildResultCard(),
-                    ],
-
-                    const SizedBox(height: 36),
+                  ),
+                  Text(
+                    'Lengua de Señas Mexicana',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      color: context.textSecondary,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              // Botón de menú (gear) que abre el endDrawer
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.primary.withOpacity(0.20),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
                   ],
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Top bar
-  // ---------------------------------------------------------------------------
-
-  Widget _buildTopBar(BuildContext context, SessionProvider session) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.divider, width: 1)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primary, AppColors.primaryDark],
-              ),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.sign_language, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 10),
-          const Text(
-            'AprendIA',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.shield_outlined, color: AppColors.primary, size: 22),
-            onPressed: () => _showSensitiveDataSheet(context, session),
-            tooltip: 'Datos sensibles protegidos',
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: AppColors.textSecondary, size: 22),
-            onPressed: () => _confirmLogout(context, session),
-            tooltip: 'Cerrar sesión',
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Encabezado de bienvenida
-  // ---------------------------------------------------------------------------
-
-  Widget _buildWelcomeHeader(String email) {
-    final name = email.split('@').first;
-    final displayName = name[0].toUpperCase() + name.substring(1);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '¡Hola, $displayName! 👋',
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Genera instrucciones en Lengua de Señas Mexicana',
-          style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-        ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Banner informativo
-  // ---------------------------------------------------------------------------
-
-  Widget _buildInfoBanner() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.primaryLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Selecciona un avatar, escribe el texto y obtén los videos LSM letra por letra.',
-              style: TextStyle(fontSize: 12, color: AppColors.primary, height: 1.4),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Etiqueta de paso numerado
-  // ---------------------------------------------------------------------------
-
-  Widget _buildStepLabel(String number, String title) {
-    return Row(
-      children: [
-        Container(
-          width: 26,
-          height: 26,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Center(
-            child: Text(
-              number,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Grid de avatares
-  // ---------------------------------------------------------------------------
-
-  Widget _buildAvatarGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1.25,
-      ),
-      itemCount: _avatars.length,
-      itemBuilder: (_, index) => _buildAvatarCard(index),
-    );
-  }
-
-  Widget _buildAvatarCard(int index) {
-    final avatar = _avatars[index];
-    final isSelected = _selectedAvatarIndex == index;
-
-    return GestureDetector(
-      onTap: () => setState(() {
-        _selectedAvatarIndex = index;
-        _result = null;
-        _errorMessage = null;
-        _disposeVideoController();
-      }),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        decoration: BoxDecoration(
-          color: isSelected ? avatar.color.withOpacity(0.10) : AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? avatar.color : AppColors.divider,
-            width: isSelected ? 2.0 : 1.0,
-          ),
-          boxShadow: isSelected
-              ? [BoxShadow(color: avatar.color.withOpacity(0.18), blurRadius: 10, offset: const Offset(0, 3))]
-              : [],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Stack(
-              alignment: Alignment.topRight,
-              children: [
-                Text(avatar.emoji, style: const TextStyle(fontSize: 38)),
-                if (isSelected)
-                  Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(color: avatar.color, shape: BoxShape.circle),
-                    child: const Icon(Icons.check, size: 12, color: Colors.white),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              avatar.label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: isSelected ? avatar.color : AppColors.textPrimary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              avatar.description,
-              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Campo de texto
-  // ---------------------------------------------------------------------------
-
-  Widget _buildTextInput() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: TextField(
-        controller: _textController,
-        maxLines: 3,
-        maxLength: 200,
-        decoration: InputDecoration(
-          hintText: 'Ej: Hola, que tal?',
-          hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
-          contentPadding: const EdgeInsets.all(16),
-          border: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          counterStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
-          prefixIcon: const Padding(
-            padding: EdgeInsets.only(left: 14, right: 10, top: 14),
-            child: Icon(Icons.text_fields_rounded, color: AppColors.primary, size: 20),
-          ),
-          prefixIconConstraints: const BoxConstraints(),
-        ),
-        onChanged: (_) => setState(() {
-          _result = null;
-          _errorMessage = null;
-        }),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Chips de ejemplos rápidos
-  // ---------------------------------------------------------------------------
-
-  Widget _buildExampleChips() {
-    final examples = ['Hola', 'Buenos dias', 'Como estas'];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Ejemplos rápidos:',
-          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: examples
-              .map(
-                (e) => GestureDetector(
-                  onTap: () => setState(() {
-                    _textController.text = e;
-                    _result = null;
-                    _errorMessage = null;
-                  }),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                    ),
-                    child: Text(
-                      e,
-                      style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w500),
-                    ),
-                  ),
+                child: IconButton(
+                  icon: const Icon(Icons.settings_rounded, color: AppColors.primary, size: 22),
+                  onPressed: () => Scaffold.of(context).openEndDrawer(),
+                  tooltip: 'Menú',
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                 ),
-              )
-              .toList(),
-        ),
-      ],
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Banner de error
-  // ---------------------------------------------------------------------------
-
-  Widget _buildErrorBanner(String message) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.error.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.error.withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 18),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(fontSize: 12, color: AppColors.error, height: 1.4),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Botón generar
-  // ---------------------------------------------------------------------------
-
-  Widget _buildGenerateButton() {
-    final canGenerate = _selectedAvatarIndex != null &&
-        _textController.text.trim().isNotEmpty;
-
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: canGenerate && !_isGenerating ? _onGenerate : null,
-        icon: _isGenerating
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-              )
-            : const Icon(Icons.play_circle_filled_rounded, size: 22),
-        label: Text(
-          _isGenerating ? 'Generando…' : 'Generar en LSM',
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: canGenerate ? AppColors.primary : AppColors.divider,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: AppColors.divider,
-          disabledForegroundColor: AppColors.textSecondary,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          elevation: canGenerate ? 2 : 0,
-        ),
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Tarjeta de resultado con reproductor secuencial
-  // ---------------------------------------------------------------------------
-
-  Widget _buildResultCard() {
-    final result = _result!;
-    final avatar = _avatars[_selectedAvatarIndex!];
-    final totalVideos = result.videoUrls.length;
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.divider),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Reproductor de video ──────────────────────────────────────────
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-            child: SizedBox(
-              width: double.infinity,
-              height: 240,
-              child: _buildVideoPlayer(avatar),
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Letra actual + progreso ───────────────────────────────
-                _buildLetterProgress(totalVideos),
-                const SizedBox(height: 12),
-
-                // ── Controles prev / next ─────────────────────────────────
-                _buildVideoControls(totalVideos),
-                const SizedBox(height: 14),
-
-                // ── Chips de letras ────────────────────────────────────────
-                _buildTokensRow(result),
-
-                // ── Caracteres no soportados ──────────────────────────────
-                if (result.unsupportedCharacters.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _buildUnsupportedChips(result.unsupportedCharacters),
-                ],
-
-                const SizedBox(height: 14),
-
-                // ── Botón nueva generación ────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton.icon(
-                    onPressed: () {
-                      _disposeVideoController();
-                      setState(() {
-                        _result = null;
-                        _errorMessage = null;
-                        _textController.clear();
-                        _selectedAvatarIndex = null;
-                        _currentVideoIndex = 0;
-                      });
-                    },
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: const Text('Nueva generación', style: TextStyle(fontSize: 12)),
-                    style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVideoPlayer(_AvatarOption avatar) {
-    if (_videoLoading) {
-      return Container(
-        color: const Color(0xFF0F172A),
-        child: const Center(
-          child: CircularProgressIndicator(color: Colors.white54),
-        ),
-      );
-    }
-
-    final controller = _videoController;
-    if (controller == null || !controller.value.isInitialized) {
-      return Container(
-        color: const Color(0xFF0F172A),
-        child: Center(child: Text(avatar.emoji, style: const TextStyle(fontSize: 64))),
-      );
-    }
-
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Container(color: Colors.black),
-        Center(
-          child: AspectRatio(
-            aspectRatio: controller.value.aspectRatio,
-            child: VideoPlayer(controller),
-          ),
-        ),
-        // Badge: letra actual
-        Positioned(
-          top: 10,
-          left: 14,
-          child: _buildLetterBadge(avatar.color),
-        ),
-        // Botón pausa/play
-        Positioned(
-          bottom: 10,
-          right: 14,
-          child: ValueListenableBuilder(
-            valueListenable: controller,
-            builder: (_, value, __) {
-              final isPlaying = value.isPlaying;
-              return GestureDetector(
-                onTap: () => isPlaying ? controller.pause() : controller.play(),
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Icon(
-                    isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLetterBadge(Color color) {
-    final result = _result;
-    if (result == null) return const SizedBox.shrink();
-    final url = result.videoUrls[_currentVideoIndex];
-    final letter = url.split('/').last.replaceAll('.mp4', '');
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        letter,
-        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Widget _buildLetterProgress(int total) {
-    final result = _result!;
-    final url = result.videoUrls[_currentVideoIndex];
-    final letter = url.split('/').last.replaceAll('.mp4', '');
-
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            letter,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          'Seña ${_currentVideoIndex + 1} de $total',
-          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
-        ),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: const Color(0xFFD1FAE5),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Row(
-            children: [
-              Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF059669)),
-              SizedBox(width: 4),
-              Text('Listo', style: TextStyle(fontSize: 11, color: Color(0xFF065F46), fontWeight: FontWeight.bold)),
+              ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildVideoControls(int total) {
+  // ── Section label ──────────────────────────────────────────────────────────
+
+  Widget _buildSectionLabel(BuildContext context, String text, bool isDark) {
     return Row(
       children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: _currentVideoIndex > 0 && !_videoLoading
-                ? () => _loadVideo(_currentVideoIndex - 1)
-                : null,
-            icon: const Icon(Icons.skip_previous_rounded, size: 18),
-            label: const Text('Anterior', style: TextStyle(fontSize: 12)),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
+        Container(
+          width: 18,
+          height: 2,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(2),
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: !_videoLoading
-                ? () => _loadVideo(_currentVideoIndex < total - 1 ? _currentVideoIndex + 1 : 0)
-                : null,
-            icon: Icon(
-              _currentVideoIndex < total - 1 ? Icons.skip_next_rounded : Icons.replay_rounded,
-              size: 18,
-            ),
-            label: Text(
-              _currentVideoIndex < total - 1 ? 'Siguiente' : 'Repetir',
-              style: const TextStyle(fontSize: 12),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.9,
+            color: isDark
+                ? AppColors.primary.withOpacity(0.85)
+                : AppColors.primary,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTokensRow(SignResult result) {
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: List.generate(result.videoUrls.length, (i) {
-        final url = result.videoUrls[i];
-        final letter = url.split('/').last.replaceAll('.mp4', '');
-        final isCurrent = i == _currentVideoIndex;
+  // ── Welcome banner con glass ───────────────────────────────────────────────
 
-        return GestureDetector(
-          onTap: () => _loadVideo(i),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: isCurrent ? AppColors.primary : AppColors.background,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isCurrent ? AppColors.primary : AppColors.divider,
-              ),
+  Widget _buildWelcomeBanner(
+    BuildContext context, String userName, String email, bool isDark,
+  ) {
+    final displayName = userName.isNotEmpty
+        ? userName
+        : (email.split('@').first.isNotEmpty
+            ? email.split('@').first[0].toUpperCase() +
+                email.split('@').first.substring(1)
+            : 'Usuario');
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withOpacity(0.06)
+                : Colors.white.withOpacity(0.65),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withOpacity(0.10)
+                  : Colors.white.withOpacity(0.85),
+              width: 1.5,
             ),
-            child: Text(
-              letter,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: isCurrent ? Colors.white : AppColors.textPrimary,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(isDark ? 0.08 : 0.06),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
               ),
-            ),
+            ],
           ),
-        );
-      }),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '¡Hola, $displayName!',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: context.textPrimary,
+                              letterSpacing: -0.3,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(Icons.waving_hand_rounded,
+                            color: const Color(0xFFF59E0B), size: 18),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Aprende y explora la Lengua de Señas Mexicana',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: context.textSecondary,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        _buildTag(context, Icons.check_circle_rounded, 'LSM', AppColors.accent, isDark),
+                        _buildTag(context, Icons.smart_display_rounded, '4 avatares', AppColors.primary, isDark),
+                        _buildTag(context, Icons.location_on_rounded, 'Chiapas', AppColors.violet, isDark),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Clay icon
+              Container(
+                width: 62,
+                height: 62,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.primary, AppColors.primaryDark],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: AppClay.shadows(AppColors.primary, isDark: isDark),
+                ),
+                child: const Icon(Icons.sign_language_rounded, color: Colors.white, size: 30),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildUnsupportedChips(List<String> unsupported) {
+  Widget _buildTag(
+    BuildContext context, IconData icon, String label, Color color, bool isDark,
+  ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFED7AA)),
+        color: color.withOpacity(isDark ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(isDark ? 0.25 : 0.20)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Color(0xFFEA580C), size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Sin seña disponible: ${unsupported.join(', ')}',
-              style: const TextStyle(fontSize: 11, color: Color(0xFF9A3412)),
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: color,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -971,18 +390,251 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Hoja de datos sensibles
-  // ---------------------------------------------------------------------------
+  // ── Option card con clay shadows ───────────────────────────────────────────
+
+  Widget _buildOptionCard(
+    BuildContext context, {
+    required bool isDark,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color primaryColor,
+    required Color gradientEnd,
+    required String badge,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        splashColor: primaryColor.withOpacity(0.06),
+        highlightColor: primaryColor.withOpacity(0.03),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.white.withOpacity(0.70),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.white.withOpacity(0.90),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: primaryColor.withOpacity(isDark ? 0.08 : 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                  if (!isDark)
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Clay icon
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [primaryColor, gradientEnd],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: AppClay.shadows(primaryColor, isDark: isDark),
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.textPrimary,
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 7, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withOpacity(isDark ? 0.18 : 0.10),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: primaryColor.withOpacity(isDark ? 0.30 : 0.25),
+                                ),
+                              ),
+                              child: Text(
+                                badge,
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: context.textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 13,
+                    color: context.textSecondary.withOpacity(0.35),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Stats strip con glass ──────────────────────────────────────────────────
+
+  Widget _buildStatsRow(BuildContext context, bool isDark) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.white.withOpacity(0.65),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withOpacity(0.08)
+                  : Colors.white.withOpacity(0.85),
+              width: 1.5,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Row(
+              children: [
+                _buildStat(context, '27', 'Letras LSM', Icons.abc_rounded, false, isDark),
+                _buildStat(context, '12', 'Palabras', Icons.menu_book_rounded, false, isDark),
+                _buildStat(context, '4', 'Avatares', Icons.people_rounded, true, isDark),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStat(
+    BuildContext context, String value, String label, IconData icon,
+    bool isLast, bool isDark,
+  ) {
+    return Expanded(
+      child: Container(
+        decoration: isLast
+            ? null
+            : BoxDecoration(
+                border: Border(
+                  right: BorderSide(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.06)
+                        : AppColors.lightDivider,
+                  ),
+                ),
+              ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(isDark ? 0.15 : 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: AppColors.primary, size: 16),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.primary,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: context.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Sensitive data sheet (sin cambios de lógica) ──────────────────────────
+
+  Route _route(Widget screen) =>
+      MaterialPageRoute(builder: (_) => screen);
+
+  IconData _sensitiveFieldIcon(String key) {
+    if (key.contains('correo')) return Icons.email_outlined;
+    if (key.contains('nombre')) return Icons.person_outline_rounded;
+    if (key.contains('token') || key.contains('FCM')) return Icons.notifications_outlined;
+    if (key.contains('región') || key.contains('region')) return Icons.location_on_outlined;
+    return Icons.lock_outline_rounded;
+  }
 
   void _showSensitiveDataSheet(BuildContext context, SessionProvider session) {
     final fields = SensitiveDataService.fieldDescriptions;
     showModalBottomSheet(
       context: context,
+      backgroundColor: context.cardColor,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Padding(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (sheetCtx) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -991,81 +643,80 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(9),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    gradient: const LinearGradient(
+                        colors: [AppColors.primary, AppColors.accent]),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.shield, color: AppColors.primary, size: 22),
+                  child: const Icon(Icons.shield, color: Colors.white, size: 20),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Datos sensibles protegidos',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: context.textPrimary,
+                        ),
                       ),
                       Text(
                         'Cifrado AES-256 · Solo en este dispositivo',
-                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        style: TextStyle(fontSize: 12, color: context.textSecondary),
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            const Divider(),
+            const SizedBox(height: 10),
+            Divider(color: context.dividerColor),
             const SizedBox(height: 4),
-            ...fields.map(
-              (f) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    Text(f.icon, style: const TextStyle(fontSize: 20)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            f.key,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                          ),
-                          Text(
-                            f.classification,
+            ...fields.map((f) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Icon(_sensitiveFieldIcon(f.key), color: AppColors.primary, size: 22),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(f.key,
                             style: TextStyle(
-                              fontSize: 11,
-                              color: f.classification.contains('Ultra') ? AppColors.error : AppColors.primary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: context.textPrimary)),
+                        Text(f.classification,
+                            style: TextStyle(
+                                fontSize: 12, color: context.textSecondary)),
+                      ],
                     ),
-                    const Icon(Icons.lock, size: 16, color: AppColors.primary),
-                  ],
-                ),
+                  ),
+                  const Icon(Icons.lock, size: 16, color: AppColors.primary),
+                ],
               ),
-            ),
+            )),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
+                color: AppColors.warning.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.warning.withOpacity(0.25)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 16, color: Color(0xFFE65100)),
-                  SizedBox(width: 8),
-                  Expanded(
+                  Icon(Icons.info_outline, size: 16, color: AppColors.warning),
+                  const SizedBox(width: 8),
+                  const Expanded(
                     child: Text(
-                      'El administrador puede eliminar estos datos remotamente '
-                      'enviando una notificación FCM con type: remote_wipe.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFFE65100)),
+                      'El administrador puede eliminar estos datos desvinculando tu cuenta.',
+                      style: TextStyle(fontSize: 12),
                     ),
                   ),
                 ],
@@ -1077,10 +728,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Diálogo de logout
-  // ---------------------------------------------------------------------------
 
   void _confirmLogout(BuildContext context, SessionProvider session) {
     showDialog(
@@ -1098,7 +745,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pop(context);
               session.logout();
             },
-            child: const Text('Cerrar sesión', style: TextStyle(color: AppColors.error)),
+            child: const Text(
+              'Cerrar sesión',
+              style: TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),

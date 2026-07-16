@@ -1,59 +1,9 @@
-import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/session_provider.dart';
 import '../../../theme/app_theme.dart';
 import 'register_screen.dart';
-
-// ─── Particle model ───────────────────────────────────────────────────────────
-
-class _Particle {
-  final double x;
-  final double baseY;
-  final double size;
-  final double speed;
-  final double opacity;
-  final bool isTeal;
-
-  const _Particle({
-    required this.x,
-    required this.baseY,
-    required this.size,
-    required this.speed,
-    required this.opacity,
-    required this.isTeal,
-  });
-}
-
-// ─── Floating-particle painter ────────────────────────────────────────────────
-
-class _ParticlePainter extends CustomPainter {
-  final List<_Particle> particles;
-  final double t;
-
-  const _ParticlePainter(this.particles, this.t);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (final p in particles) {
-      final raw = (p.baseY - t * p.speed) % 1.0;
-      final y = raw < 0 ? raw + 1.0 : raw;
-      final paint = Paint()
-        ..color = (p.isTeal
-                ? const Color(0xFF06D6A0)
-                : const Color(0xFF4F8EF7))
-            .withOpacity(p.opacity);
-      canvas.drawCircle(
-        Offset(p.x * size.width, y * size.height),
-        p.size,
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ParticlePainter old) => old.t != t;
-}
 
 // ─── LoginScreen ──────────────────────────────────────────────────────────────
 
@@ -64,8 +14,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with TickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   // ── Lógica de formulario (SIN CAMBIOS) ───────────────────────────────────
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
@@ -75,44 +24,16 @@ class _LoginScreenState extends State<LoginScreen>
   // ── Estado de visibilidad de contraseña ──────────────────────────────────
   bool _obscurePassword = true;
 
-  // ── Animaciones ──────────────────────────────────────────────────────────
-  late final AnimationController _particleCtrl;
-  late final AnimationController _pulseCtrl;
-  late final List<_Particle> _particles;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _particleCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 14),
-    )..repeat();
-
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat(reverse: true);
-
-    final rng = math.Random(7);
-    _particles = List.generate(24, (i) {
-      return _Particle(
-        x: rng.nextDouble(),
-        baseY: rng.nextDouble(),
-        size: rng.nextDouble() * 3 + 1.2,
-        speed: rng.nextDouble() * 0.35 + 0.12,
-        opacity: rng.nextDouble() * 0.30 + 0.07,
-        isTeal: i % 4 == 0,
-      );
-    });
-  }
+  // ── Focus nodes para navegación con teclado ──────────────────────────────
+  final _emailFocus    = FocusNode();
+  final _passwordFocus = FocusNode();
 
   @override
   void dispose() {
-    _particleCtrl.dispose();
-    _pulseCtrl.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -144,37 +65,26 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF080E1A),
-      body: AnimatedBuilder(
-        animation: Listenable.merge([_particleCtrl, _pulseCtrl]),
-        builder: (context, _) {
-          return Stack(
-            children: [
-              // Fondo degradado
-              _buildBackground(),
-              // Partículas flotantes
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _ParticlePainter(_particles, _particleCtrl.value),
-                ),
+      body: Stack(
+        children: [
+          // Fondo degradado estático
+          _buildBackground(),
+          // Contenido principal — no scrolleable, ocupa toda la pantalla
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: [
+                  const Spacer(flex: 2),
+                  _buildLogo(),
+                  const Spacer(flex: 2),
+                  _buildFormCard(),
+                  const Spacer(flex: 1),
+                ],
               ),
-              // Contenido principal
-              SafeArea(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 48),
-                      _buildLogo(),
-                      const SizedBox(height: 44),
-                      _buildFormCard(),
-                      const SizedBox(height: 36),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -182,73 +92,80 @@ class _LoginScreenState extends State<LoginScreen>
   // ── Widgets de UI ─────────────────────────────────────────────────────────
 
   Widget _buildBackground() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0, -0.3),
-          radius: 1.4,
-          colors: [
-            Color(0xFF0D1B3E),
-            Color(0xFF080E1A),
-            Color(0xFF04070F),
-          ],
-          stops: [0.0, 0.55, 1.0],
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF060918), Color(0xFF030810), Color(0xFF08051A)],
+              stops: [0.0, 0.55, 1.0],
+            ),
+          ),
         ),
-      ),
+        const Positioned(
+          top: -60, right: -40,
+          child: AppBlob(size: 280, color: AppColors.primary, opacity: 0.10),
+        ),
+        const Positioned(
+          bottom: 80, left: -60,
+          child: AppBlob(size: 300, color: AppColors.violet, opacity: 0.08),
+        ),
+        const Positioned(
+          top: 200, right: 30,
+          child: AppBlob(size: 160, color: AppColors.accent, opacity: 0.06),
+        ),
+      ],
     );
   }
 
   Widget _buildLogo() {
-    final pulse = _pulseCtrl.value;
-
     return Column(
       children: [
-        // Glow animado
+        // Logo de la app con sombra estática
         Container(
-          width: 94,
-          height: 94,
+          width: 100,
+          height: 100,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            gradient: const LinearGradient(
-              colors: [Color(0xFF4F8EF7), Color(0xFF06D6A0)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color:
-                    const Color(0xFF4F8EF7).withOpacity(0.22 + pulse * 0.28),
-                blurRadius: 22 + pulse * 22,
-                spreadRadius: 1 + pulse * 5,
+                color: const Color(0xFF4F8EF7).withOpacity(0.30),
+                blurRadius: 32,
+                spreadRadius: 4,
+                offset: const Offset(0, 8),
               ),
               BoxShadow(
-                color:
-                    const Color(0xFF06D6A0).withOpacity(0.08 + pulse * 0.14),
-                blurRadius: 44 + pulse * 28,
-                spreadRadius: -6,
+                color: const Color(0xFF06D6A0).withOpacity(0.12),
+                blurRadius: 48,
+                spreadRadius: -4,
               ),
             ],
           ),
-          child: const Icon(
-            Icons.sign_language_rounded,
-            color: Colors.white,
-            size: 48,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: Image.asset(
+              'assets/images/logo-app.png',
+              width: 100,
+              height: 100,
+              fit: BoxFit.cover,
+            ),
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 20),
         const Text(
-          'AprendIA',
+          'VirtualSign LSM',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 32,
+            fontSize: 28,
             fontWeight: FontWeight.bold,
-            letterSpacing: 2.5,
+            letterSpacing: 1.0,
           ),
         ),
         const SizedBox(height: 10),
         Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
           decoration: BoxDecoration(
             border: Border.all(
                 color: const Color(0xFF06D6A0).withOpacity(0.35)),
@@ -256,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen>
             color: const Color(0xFF06D6A0).withOpacity(0.07),
           ),
           child: const Text(
-            'LENGUA DE SEÑAS · CHIAPAS',
+            'LENGUA DE SEÑAS MEXICANA',
             style: TextStyle(
               color: Color(0xFF06D6A0),
               fontSize: 10,
@@ -270,22 +187,32 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _buildFormCard() {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.045),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.09),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.45),
-            blurRadius: 48,
-            offset: const Offset(0, 12),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.14),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.45),
+                blurRadius: 48,
+                offset: const Offset(0, 12),
+              ),
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.06),
+                blurRadius: 32,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
       child: Form(
         key: _formKey,
         child: Column(
@@ -307,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen>
                 fontSize: 13,
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 20),
 
             // ── Correo electrónico (validadores SIN CAMBIOS) ──────────────
             _buildField(
@@ -315,6 +242,9 @@ class _LoginScreenState extends State<LoginScreen>
               hint: 'ejemplo@correo.com',
               icon: Icons.email_outlined,
               controller: _emailController,
+              focusNode: _emailFocus,
+              nextFocusNode: _passwordFocus,
+              textInputAction: TextInputAction.next,
               keyboardType: TextInputType.emailAddress,
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -334,6 +264,9 @@ class _LoginScreenState extends State<LoginScreen>
               hint: 'Mínimo 8 caracteres',
               icon: Icons.lock_outline,
               controller: _passwordController,
+              focusNode: _passwordFocus,
+              textInputAction: TextInputAction.done,
+              onSubmitted: _onLogin,
               isPassword: true,
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -365,14 +298,14 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             _buildGradientButton(
               text: 'Iniciar sesión',
               isLoading: _isLoading,
               onPressed: _onLogin,
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -393,7 +326,7 @@ class _LoginScreenState extends State<LoginScreen>
                         color: Colors.white.withOpacity(0.12))),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
 
             _buildOutlineButton(
               text: 'Crear cuenta nueva',
@@ -406,7 +339,9 @@ class _LoginScreenState extends State<LoginScreen>
           ],
         ),
       ),
-    );
+        ), // Container
+      ), // BackdropFilter
+    ); // ClipRRect
   }
 
   // ── Helpers de campos y botones ───────────────────────────────────────────
@@ -419,6 +354,10 @@ class _LoginScreenState extends State<LoginScreen>
     bool isPassword = false,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
+    FocusNode? focusNode,
+    FocusNode? nextFocusNode,
+    TextInputAction textInputAction = TextInputAction.next,
+    VoidCallback? onSubmitted,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -434,9 +373,18 @@ class _LoginScreenState extends State<LoginScreen>
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          focusNode: focusNode,
           keyboardType: keyboardType,
+          textInputAction: textInputAction,
           obscureText: isPassword ? _obscurePassword : false,
           validator: validator,
+          onFieldSubmitted: (_) {
+            if (nextFocusNode != null) {
+              FocusScope.of(context).requestFocus(nextFocusNode);
+            } else {
+              onSubmitted?.call();
+            }
+          },
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
             hintText: hint,

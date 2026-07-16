@@ -3,6 +3,7 @@ import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/sensitive_data_service.dart';
 import '../services/session_service.dart';
+import '../services/user_service.dart';
 
 class SessionProvider extends ChangeNotifier {
   bool _isLoggedIn = false;
@@ -55,6 +56,56 @@ class SessionProvider extends ChangeNotifier {
     required String password,
   }) async {
     return AuthService.register(name: name, email: email, password: password);
+  }
+
+  /// Actualiza nombre y/o email en el servidor y en el estado local.
+  /// Devuelve un mensaje de error o null si tuvo éxito.
+  Future<String?> updateProfile({String? name, String? email}) async {
+    try {
+      final data = await UserService.updateProfile(
+        token: _sessionToken,
+        name: name,
+        email: email,
+      );
+      if (data['name'] != null) _userName = data['name'] as String;
+      if (data['email'] != null) _userEmail = data['email'] as String;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Cambia la contraseña del usuario. Devuelve mensaje de error o null.
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await UserService.changePassword(
+        token: _sessionToken,
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Soft-delete de la cuenta y cierre de sesión local.
+  Future<String?> deleteAccount() async {
+    try {
+      await UserService.deleteAccount(token: _sessionToken);
+      SessionService.instance.stop();
+      NotificationService.onRemoteWipe = null;
+      await AuthService.logout();
+      _clearState();
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
   }
 
   Future<void> logout() async {

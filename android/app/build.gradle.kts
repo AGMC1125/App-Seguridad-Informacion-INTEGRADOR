@@ -21,9 +21,18 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../../virtualsign.keystore")
+            storePassword = "VirtualSign2026"
+            keyAlias = "virtualsign"
+            keyPassword = "VirtualSign2026"
+        }
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.aprendia.aprendia"
+        applicationId = "com.kitsune.virtualsign"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion // Firebase requiere mínimo 21
@@ -34,8 +43,8 @@ android {
 
     buildTypes {
         release {
-            // Signing con debug keys para pruebas de release local.
-            signingConfig = signingConfigs.getByName("debug")
+            // Signing con keystore de producción.
+            signingConfig = signingConfigs.getByName("release")
 
             // ── R8: Ofuscación, Shrinking y Optimización ──────────────────
             // isMinifyEnabled activa R8 (sucesor de ProGuard) que realiza:

@@ -26,9 +26,11 @@ class AprendIAApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AprendIA - LSM',
+      title: 'VirtualSign LSM',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.system,   // sigue el modo claro/oscuro del dispositivo
       home: const _AppRoot(),
     );
   }

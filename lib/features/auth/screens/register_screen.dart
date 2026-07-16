@@ -1,8 +1,12 @@
 import 'dart:math' as math;
+import 'package:flutter/gestures.dart';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/session_provider.dart';
 import '../../../theme/app_theme.dart';
+import 'privacy_policy_screen.dart';
+import 'terms_and_conditions_screen.dart';
 
 // ─── Particle painter (reutilizado del login) ─────────────────────────────────
 
@@ -71,10 +75,18 @@ class _RegisterScreenState extends State<RegisterScreen>
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
   bool _acceptTerms = false;
+  late final TapGestureRecognizer _privacyTapRecognizer;
+  late final TapGestureRecognizer _termsTapRecognizer;
 
   // ── Estado de visibilidad de contraseñas ─────────────────────────────────
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+
+  // ── Focus nodes para navegación con teclado ──────────────────────────────
+  final _nameFocus    = FocusNode();
+  final _emailFocus   = FocusNode();
+  final _passFocus    = FocusNode();
+  final _confirmFocus = FocusNode();
 
   // ── Animaciones ──────────────────────────────────────────────────────────
   late final AnimationController _particleCtrl;
@@ -83,6 +95,22 @@ class _RegisterScreenState extends State<RegisterScreen>
   @override
   void initState() {
     super.initState();
+
+    _privacyTapRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+        );
+      };
+
+    _termsTapRecognizer = TapGestureRecognizer()
+      ..onTap = () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TermsAndConditionsScreen()),
+        );
+      };
 
     _particleCtrl = AnimationController(
       vsync: this,
@@ -104,11 +132,17 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   @override
   void dispose() {
+    _privacyTapRecognizer.dispose();
+    _termsTapRecognizer.dispose();
     _particleCtrl.dispose();
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _nameFocus.dispose();
+    _emailFocus.dispose();
+    _passFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
@@ -205,19 +239,31 @@ class _RegisterScreenState extends State<RegisterScreen>
   // ── Widgets ───────────────────────────────────────────────────────────────
 
   Widget _buildBackground() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0, -0.5),
-          radius: 1.3,
-          colors: [
-            Color(0xFF0D1B3E),
-            Color(0xFF080E1A),
-            Color(0xFF04070F),
-          ],
-          stops: [0.0, 0.55, 1.0],
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF060918), Color(0xFF030810), Color(0xFF08051A)],
+              stops: [0.0, 0.55, 1.0],
+            ),
+          ),
         ),
-      ),
+        const Positioned(
+          top: -50, left: -60,
+          child: AppBlob(size: 260, color: AppColors.violet, opacity: 0.09),
+        ),
+        const Positioned(
+          bottom: 60, right: -50,
+          child: AppBlob(size: 280, color: AppColors.primary, opacity: 0.08),
+        ),
+        const Positioned(
+          top: 180, left: 30,
+          child: AppBlob(size: 140, color: AppColors.accent, opacity: 0.06),
+        ),
+      ],
     );
   }
 
@@ -327,20 +373,29 @@ class _RegisterScreenState extends State<RegisterScreen>
   }
 
   Widget _buildFormCard() {
-    return Container(
-      padding: const EdgeInsets.all(26),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.045),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.09)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.45),
-            blurRadius: 48,
-            offset: const Offset(0, 12),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: const EdgeInsets.all(26),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withOpacity(0.14), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.45),
+                blurRadius: 48,
+                offset: const Offset(0, 12),
+              ),
+              BoxShadow(
+                color: AppColors.violet.withOpacity(0.06),
+                blurRadius: 32,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
       child: Form(
         key: _formKey,
         child: Column(
@@ -352,6 +407,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               hint: 'Ej. Juan Pérez',
               icon: Icons.person_outline,
               controller: _nameController,
+              focusNode: _nameFocus,
+              nextFocusNode: _emailFocus,
+              textInputAction: TextInputAction.next,
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Por favor ingresa tu nombre';
@@ -370,6 +428,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               hint: 'ejemplo@correo.com',
               icon: Icons.email_outlined,
               controller: _emailController,
+              focusNode: _emailFocus,
+              nextFocusNode: _passFocus,
+              textInputAction: TextInputAction.next,
               keyboardType: TextInputType.emailAddress,
               validator: (value) {
                 if (value == null || value.isEmpty) {
@@ -390,6 +451,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               hint: 'Mínimo 8 caracteres',
               icon: Icons.lock_outline,
               controller: _passwordController,
+              focusNode: _passFocus,
+              nextFocusNode: _confirmFocus,
+              textInputAction: TextInputAction.next,
               isPassword: true,
               obscureValue: _obscurePassword,
               onToggleObscure: () =>
@@ -412,6 +476,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               hint: 'Repite tu contraseña',
               icon: Icons.lock_outline,
               controller: _confirmPasswordController,
+              focusNode: _confirmFocus,
+              textInputAction: TextInputAction.done,
+              onSubmitted: _onRegister,
               isPassword: true,
               obscureValue: _obscureConfirm,
               onToggleObscure: () =>
@@ -468,6 +535,8 @@ class _RegisterScreenState extends State<RegisterScreen>
           ],
         ),
       ),
+    ),
+    ),
     );
   }
 
@@ -511,22 +580,28 @@ class _RegisterScreenState extends State<RegisterScreen>
               text: 'Acepto los ',
               style: TextStyle(
                   color: Colors.white.withOpacity(0.45), fontSize: 13),
-              children: const [
+              children: [
                 TextSpan(
                   text: 'Términos y condiciones',
-                  style: TextStyle(
+                  recognizer: _termsTapRecognizer,
+                  style: const TextStyle(
                     color: Color(0xFF4F8EF7),
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
+                    decoration: TextDecoration.underline,
+                    decorationColor: Color(0xFF4F8EF7),
                   ),
                 ),
-                TextSpan(text: ' y la '),
+                const TextSpan(text: ' y la '),
                 TextSpan(
                   text: 'Política de privacidad',
-                  style: TextStyle(
+                  recognizer: _privacyTapRecognizer,
+                  style: const TextStyle(
                     color: Color(0xFF4F8EF7),
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
+                    decoration: TextDecoration.underline,
+                    decorationColor: Color(0xFF4F8EF7),
                   ),
                 ),
               ],
@@ -549,6 +624,10 @@ class _RegisterScreenState extends State<RegisterScreen>
     VoidCallback? onToggleObscure,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
+    FocusNode? focusNode,
+    FocusNode? nextFocusNode,
+    TextInputAction textInputAction = TextInputAction.next,
+    VoidCallback? onSubmitted,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,9 +643,18 @@ class _RegisterScreenState extends State<RegisterScreen>
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
+          focusNode: focusNode,
           keyboardType: keyboardType,
+          textInputAction: textInputAction,
           obscureText: isPassword ? obscureValue : false,
           validator: validator,
+          onFieldSubmitted: (_) {
+            if (nextFocusNode != null) {
+              FocusScope.of(context).requestFocus(nextFocusNode);
+            } else {
+              onSubmitted?.call();
+            }
+          },
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
             hintText: hint,

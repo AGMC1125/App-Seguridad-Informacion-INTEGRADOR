@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../core/services/security_service.dart';
 import '../theme/app_theme.dart';
@@ -197,20 +198,35 @@ class _LoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: AppColors.background,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: AppColors.primary),
-            SizedBox(height: 20),
-            Text(
-              'Verificando seguridad del dispositivo...',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+    return Container(
+      decoration: const BoxDecoration(gradient: AppGradients.dark),
+      child: Stack(
+        children: [
+          const Positioned(
+            top: -60, right: -40,
+            child: AppBlob(size: 200, color: AppColors.primary, opacity: 0.09),
+          ),
+          const Positioned(
+            bottom: 80, left: -60,
+            child: AppBlob(size: 240, color: AppColors.violet, opacity: 0.07),
+          ),
+          const Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: AppColors.primary),
+                  SizedBox(height: 20),
+                  Text(
+                    'Verificando seguridad del dispositivo...',
+                    style: TextStyle(color: AppColors.darkTextSecondary, fontSize: 14),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -229,75 +245,129 @@ class _BlockedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFF0F0),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 36.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withOpacity(0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, size: 52, color: AppColors.error),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.error,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF7A1A1A),
-                    height: 1.6,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.error.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border:
-                        Border.all(color: AppColors.error.withOpacity(0.3)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.shield_outlined,
-                          size: 16, color: AppColors.error),
-                      SizedBox(width: 8),
-                      Text(
-                        'Protección de seguridad activa',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.error,
-                          fontWeight: FontWeight.w600,
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1A0606), Color(0xFF0F0303), Color(0xFF180508)],
+          stops: [0.0, 0.55, 1.0],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -80, right: -40,
+            child: AppBlob(size: 260, color: AppColors.error, opacity: 0.10),
+          ),
+          Positioned(
+            bottom: 60, left: -60,
+            child: AppBlob(size: 220, color: const Color(0xFFB91C1C), opacity: 0.07),
+          ),
+          Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: AppColors.error.withOpacity(0.18),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.error.withOpacity(0.12),
+                              blurRadius: 32,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                 
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: AppColors.error.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.error.withOpacity(0.30),
+                                    blurRadius: 24,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: Icon(icon, size: 52, color: AppColors.error),
+                            ),
+                            const SizedBox(height: 28),
+                            Text(
+                              title,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFFC8181),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              message,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFFFCA5A5),
+                                height: 1.6,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: AppColors.error.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: AppColors.error.withOpacity(0.35)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.shield_outlined,
+                                      size: 16, color: Color(0xFFFC8181)),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Protección de seguridad activa',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFFFC8181),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

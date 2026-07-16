@@ -17,7 +17,8 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
         // FLAG_SECURE: impide capturas de pantalla y grabaciones de la app.
         // El SO mostrará pantalla negra si el usuario intenta capturar.
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // TODO: reactivar antes de subir a producción
+        // window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
