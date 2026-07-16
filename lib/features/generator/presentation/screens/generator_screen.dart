@@ -7,14 +7,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/network/api_client.dart';
 import '../../../../features/auth/presentation/providers/session_notifier.dart';
-import '../../../../features/history/di/history_providers.dart';
-import '../../../../features/search/di/search_providers.dart';
-import '../../../../features/search/domain/entities/sign_suggestion.dart';
 import '../../../../theme/app_theme.dart';
 import '../../di/generator_providers.dart';
 import '../../domain/entities/merged_video_result.dart';
+import '../providers/generator_notifier.dart';
+import '../providers/generator_state.dart';
 
 // ---------------------------------------------------------------------------
 // Modelo de avatar (privado, solo presentation)
@@ -48,22 +46,16 @@ class GeneratorScreen extends ConsumerStatefulWidget {
 }
 
 class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
+  // ── Estado local puro de UI (no pertenece al dominio) ─────────────────────
   int? _selectedAvatarIndex;
   final _textController = TextEditingController();
-  bool _isGenerating = false;
-  String? _errorMessage;
 
-  MergedVideoResult? _result;
-
+  // ── Video player (ciclo de vida ligado al widget) ─────────────────────────
   VideoPlayerController? _videoController;
   bool _videoLoading = false;
 
-  bool _isSavingHistory = false;
-  bool _historyAlreadySaved = false;
+  // ── Compartir / descargar (acción de infraestructura de plataforma) ────────
   bool _isSharing = false;
-
-  List<SignSuggestion> _suggestions = [];
-  bool _loadingSuggestions = false;
 
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _resultKey = GlobalKey();
@@ -104,18 +96,19 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
     _textController.dispose();
     _scrollController.dispose();
     _disposeVideoController();
+    // Limpiar estado del notifier para evitar residuos al volver a la pantalla
+    ref.read(generatorNotifierProvider.notifier).clearResult();
     super.dispose();
   }
 
   // ---------------------------------------------------------------------------
-  // Video player helpers
+  // Video player helpers — ciclo de vida ligado al widget
   // ---------------------------------------------------------------------------
 
-  Future<void> _loadVideo() async {
-    if (_result == null) return;
+  Future<void> _loadVideo(MergedVideoResult result) async {
     setState(() => _videoLoading = true);
     await _disposeVideoController();
-    final url = '${AppConstants.apiBaseUrl}${_result!.mergedVideoUrl}';
+    final url = '${AppConstants.apiBaseUrl}${result.mergedVideoUrl}';
     final controller = VideoPlayerController.networkUrl(Uri.parse(url));
     try {
       await controller.initialize();
@@ -144,7 +137,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // Generar señas
+  // Generar señas — delega al GeneratorNotifier
   // ---------------------------------------------------------------------------
 
   Future<void> _onGenerate() async {
@@ -152,89 +145,25 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
     final text = _textController.text.trim();
     final token = ref.read(sessionNotifierProvider).token;
 
-    setState(() {
-      _isGenerating = true;
-      _errorMessage = null;
-      _result = null;
-      _suggestions = [];
-    });
     await _disposeVideoController();
 
-    try {
-      final result = await ref.read(generateMergedVideoUseCaseProvider).call(
-        text: text,
-        avatarCode: avatar.id,
-        token: token,
-      );
-
-      if (!mounted) return;
-      if (result.mergedVideoUrl.isEmpty) {
-        setState(() {
-          _isGenerating = false;
-          _errorMessage = 'No se encontraron señas para el texto ingresado.';
-        });
-        return;
-      }
-      setState(() { _result = result; _isGenerating = false; _historyAlreadySaved = false; });
-      await _loadVideo();
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeInOutCubic,
-          );
-        }
-      });
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      setState(() { _isGenerating = false; _errorMessage = e.message; });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() { _isGenerating = false; _errorMessage = 'No se pudo conectar con el servidor.'; });
-    }
+    await ref.read(generatorNotifierProvider.notifier).generateVideo(
+          text: text,
+          avatarCode: avatar.id,
+          token: token,
+        );
   }
 
   // ---------------------------------------------------------------------------
-  // Acciones: historial, descarga, compartir
+  // Acciones de plataforma: descargar y compartir
+  // (no involucran lógica de dominio — permanecen en el widget)
   // ---------------------------------------------------------------------------
 
-  Future<void> _saveToHistory() async {
-    if (_isSavingHistory || _historyAlreadySaved || _result == null) return;
-    final token = ref.read(sessionNotifierProvider).token;
-    if (token.isEmpty) return;
-    setState(() => _isSavingHistory = true);
-    try {
-      await ref.read(saveHistoryUseCaseProvider).call(
-        token: token,
-        originalText: _result!.originalText,
-        avatarCode: _result!.avatarCode,
-        generatedFilename: _result!.generatedFilename,
-      );
-      if (!mounted) return;
-      setState(() { _isSavingHistory = false; _historyAlreadySaved = true; });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Guardado en historial'),
-        backgroundColor: AppColors.success,
-        behavior: SnackBarBehavior.floating,
-      ));
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isSavingHistory = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('No se pudo guardar en historial'),
-        backgroundColor: AppColors.error,
-        behavior: SnackBarBehavior.floating,
-      ));
-    }
-  }
-
-  Future<void> _downloadVideo() async {
-    if (_isSharing || _result == null) return;
+  Future<void> _downloadVideo(MergedVideoResult result) async {
+    if (_isSharing) return;
     setState(() => _isSharing = true);
     try {
-      final url = '${AppConstants.apiBaseUrl}${_result!.mergedVideoUrl}';
+      final url = '${AppConstants.apiBaseUrl}${result.mergedVideoUrl}';
       final response = await http.get(Uri.parse(url));
       final Directory dir;
       if (Platform.isAndroid) {
@@ -242,8 +171,8 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
       } else {
         dir = await getApplicationDocumentsDirectory();
       }
-      final filename = (_result!.generatedFilename.isNotEmpty)
-          ? _result!.generatedFilename
+      final filename = result.generatedFilename.isNotEmpty
+          ? result.generatedFilename
           : 'sena_lsm_${DateTime.now().millisecondsSinceEpoch}.mp4';
       final file = File('${dir.path}/$filename');
       await file.writeAsBytes(response.bodyBytes);
@@ -265,22 +194,22 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
     }
   }
 
-  Future<void> _shareViaWhatsApp() async {
-    if (_isSharing || _result == null) return;
+  Future<void> _shareViaWhatsApp(MergedVideoResult result) async {
+    if (_isSharing) return;
     setState(() => _isSharing = true);
     try {
-      final url = '${AppConstants.apiBaseUrl}${_result!.mergedVideoUrl}';
+      final url = '${AppConstants.apiBaseUrl}${result.mergedVideoUrl}';
       final response = await http.get(Uri.parse(url));
       final tmpDir = await getTemporaryDirectory();
-      final filename = (_result!.generatedFilename.isNotEmpty)
-          ? _result!.generatedFilename
+      final filename = result.generatedFilename.isNotEmpty
+          ? result.generatedFilename
           : 'sena_lsm_${DateTime.now().millisecondsSinceEpoch}.mp4';
       final file = File('${tmpDir.path}/$filename');
       await file.writeAsBytes(response.bodyBytes);
       if (!mounted) return;
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'video/mp4')],
-        text: 'Seña LSM: "${_result!.originalText}"',
+        text: 'Seña LSM: "${result.originalText}"',
       );
       if (mounted) setState(() => _isSharing = false);
     } catch (_) {
@@ -301,6 +230,46 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ── Observar estado del notifier ──────────────────────────────────────
+    final genState = ref.watch(generatorNotifierProvider);
+    final isGenerating = genState.status == GeneratorStatus.loading;
+
+    // ── Efectos secundarios: reaccionar a cambios de estado ───────────────
+    ref.listen<GeneratorState>(generatorNotifierProvider, (prev, next) {
+      // Cuando llega un resultado nuevo → cargar video + scroll automático
+      if (next.result != null && next.result != prev?.result) {
+        _loadVideo(next.result!);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeInOutCubic,
+            );
+          }
+        });
+      }
+
+      // Historial guardado exitosamente
+      if (!(prev?.historyAlreadySaved ?? false) && next.historyAlreadySaved) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Guardado en historial'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+
+      // Error al guardar en historial
+      if (next.saveHistoryError != null &&
+          next.saveHistoryError != prev?.saveHistoryError) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(next.saveHistoryError!),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    });
+
     final isDark = context.isDark;
     return Container(
       decoration: BoxDecoration(
@@ -377,7 +346,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
                   Text('El avatar representará las señas en la animación generada',
                       style: TextStyle(fontSize: 12, color: context.textSecondary)),
                   const SizedBox(height: 14),
-                  _buildAvatarGrid(context),
+                  _buildAvatarGrid(context, genState),
                   const SizedBox(height: 26),
 
                   // Paso 2: Texto
@@ -386,27 +355,27 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
                   Text('El texto será deletreado letra a letra en LSM',
                       style: TextStyle(fontSize: 12, color: context.textSecondary)),
                   const SizedBox(height: 14),
-                  _buildTextInput(context),
+                  _buildTextInput(context, genState),
                   const SizedBox(height: 10),
-                  _buildSuggestions(context),
+                  _buildSuggestions(context, genState),
                   _buildExampleChips(context),
                   const SizedBox(height: 22),
 
-                  if (_errorMessage != null) ...[
-                    _buildErrorBanner(_errorMessage!),
+                  if (genState.error != null) ...[
+                    _buildErrorBanner(genState.error!),
                     const SizedBox(height: 16),
                   ],
 
-                  _buildGenerateButton(context),
+                  _buildGenerateButton(context, isGenerating),
 
-                  if (_result != null) ...[
+                  if (genState.result != null) ...[
                     const SizedBox(height: 32),
                     KeyedSubtree(
                       key: _resultKey,
                       child: _buildStepLabel(context, '3', 'Reproducción de señas'),
                     ),
                     const SizedBox(height: 14),
-                    _buildResultCard(context),
+                    _buildResultCard(context, genState),
                   ],
 
                   const SizedBox(height: 36),
@@ -415,7 +384,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
             ),
 
             // Overlay de carga al generar
-            if (_isGenerating)
+            if (isGenerating)
               Positioned.fill(
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -505,7 +474,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
   // Avatar grid
   // ---------------------------------------------------------------------------
 
-  Widget _buildAvatarGrid(BuildContext context) {
+  Widget _buildAvatarGrid(BuildContext context, GeneratorState genState) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -513,20 +482,21 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
         crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.15,
       ),
       itemCount: _avatars.length,
-      itemBuilder: (_, index) => _buildAvatarCard(context, index),
+      itemBuilder: (_, index) => _buildAvatarCard(context, index, genState),
     );
   }
 
-  Widget _buildAvatarCard(BuildContext context, int index) {
+  Widget _buildAvatarCard(BuildContext context, int index, GeneratorState genState) {
     final avatar = _avatars[index];
     final isSelected = _selectedAvatarIndex == index;
     return GestureDetector(
-      onTap: () => setState(() {
-        _selectedAvatarIndex = index;
-        _result = null;
-        _errorMessage = null;
-        _disposeVideoController();
-      }),
+      onTap: () {
+        setState(() => _selectedAvatarIndex = index);
+        if (genState.result != null || genState.error != null) {
+          ref.read(generatorNotifierProvider.notifier).clearResult();
+          _disposeVideoController();
+        }
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         decoration: BoxDecoration(
@@ -582,7 +552,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
   // Text input
   // ---------------------------------------------------------------------------
 
-  Widget _buildTextInput(BuildContext context) {
+  Widget _buildTextInput(BuildContext context, GeneratorState genState) {
     return Container(
       decoration: BoxDecoration(
         color: context.cardColor,
@@ -610,34 +580,27 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
           prefixIconConstraints: const BoxConstraints(),
         ),
         onChanged: (value) {
-          setState(() { _result = null; _errorMessage = null; });
-          _fetchSuggestions(value);
+          // Limpia resultado anterior al editar texto
+          if (genState.result != null || genState.error != null) {
+            ref.read(generatorNotifierProvider.notifier).clearResult();
+          }
+          final token = ref.read(sessionNotifierProvider).token;
+          final lastWord = value.trim().split(' ').last;
+          ref.read(generatorNotifierProvider.notifier).fetchSuggestions(
+                lastWord: lastWord,
+                token: token,
+              );
         },
       ),
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Sugerencias semánticas — ahora usa searchSignsUseCaseProvider
+  // Sugerencias semánticas — observa GeneratorState.suggestions
   // ---------------------------------------------------------------------------
 
-  Future<void> _fetchSuggestions(String text) async {
-    final lastWord = text.trim().split(' ').last;
-    if (lastWord.length < 2) {
-      if (_suggestions.isNotEmpty) setState(() => _suggestions = []);
-      return;
-    }
-    setState(() => _loadingSuggestions = true);
-    final token = ref.read(sessionNotifierProvider).token;
-    final results = await ref.read(searchSignsUseCaseProvider).call(
-      token: token,
-      query: lastWord,
-    );
-    if (mounted) setState(() { _suggestions = results; _loadingSuggestions = false; });
-  }
-
-  Widget _buildSuggestions(BuildContext context) {
-    if (_loadingSuggestions) {
+  Widget _buildSuggestions(BuildContext context, GeneratorState genState) {
+    if (genState.loadingSuggestions) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
@@ -650,7 +613,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
         ),
       );
     }
-    if (_suggestions.isEmpty) return const SizedBox.shrink();
+    if (genState.suggestions.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -667,13 +630,13 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
           const SizedBox(height: 7),
           Wrap(
             spacing: 8, runSpacing: 6,
-            children: _suggestions.map((s) => GestureDetector(
+            children: genState.suggestions.map((s) => GestureDetector(
               onTap: () {
                 final parts = _textController.text.trim().split(' ');
                 parts[parts.length - 1] = s.word;
                 _textController.text = '${parts.join(' ')} ';
                 _textController.selection = TextSelection.collapsed(offset: _textController.text.length);
-                setState(() { _suggestions = []; _result = null; _errorMessage = null; });
+                ref.read(generatorNotifierProvider.notifier).clearResult();
               },
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -712,7 +675,10 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
         Wrap(
           spacing: 8, runSpacing: 6,
           children: examples.map((e) => GestureDetector(
-            onTap: () => setState(() { _textController.text = e; _result = null; _errorMessage = null; }),
+            onTap: () {
+              _textController.text = e;
+              ref.read(generatorNotifierProvider.notifier).clearResult();
+            },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -754,7 +720,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
   // Generate button
   // ---------------------------------------------------------------------------
 
-  Widget _buildGenerateButton(BuildContext context) {
+  Widget _buildGenerateButton(BuildContext context, bool isGenerating) {
     final canGenerate = _selectedAvatarIndex != null && _textController.text.trim().isNotEmpty;
     return SizedBox(
       width: double.infinity, height: 54,
@@ -768,11 +734,11 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
               : [],
         ),
         child: ElevatedButton.icon(
-          onPressed: canGenerate && !_isGenerating ? _onGenerate : null,
-          icon: _isGenerating
+          onPressed: canGenerate && !isGenerating ? _onGenerate : null,
+          icon: isGenerating
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
               : const Icon(Icons.play_circle_filled_rounded, size: 24),
-          label: Text(_isGenerating ? 'Generando…' : 'Generar en LSM',
+          label: Text(isGenerating ? 'Generando…' : 'Generar en LSM',
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.transparent, shadowColor: Colors.transparent,
@@ -789,8 +755,8 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
   // Result card
   // ---------------------------------------------------------------------------
 
-  Widget _buildResultCard(BuildContext context) {
-    final result = _result!;
+  Widget _buildResultCard(BuildContext context, GeneratorState genState) {
+    final result = genState.result!;
     final avatar = _avatars[_selectedAvatarIndex!];
     return Container(
       width: double.infinity,
@@ -815,7 +781,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
                 const SizedBox(height: 12),
                 _buildVideoControls(context),
                 const SizedBox(height: 12),
-                _buildActionButtons(context),
+                _buildActionButtons(context, genState, result),
                 const SizedBox(height: 14),
                 _buildTextTokens(context, result),
                 if (result.unsupportedCharacters.isNotEmpty) ...[
@@ -828,11 +794,9 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
                   child: TextButton.icon(
                     onPressed: () {
                       _disposeVideoController();
-                      setState(() {
-                        _result = null; _errorMessage = null;
-                        _textController.clear(); _selectedAvatarIndex = null;
-                        _suggestions = [];
-                      });
+                      ref.read(generatorNotifierProvider.notifier).clearResult();
+                      _textController.clear();
+                      setState(() => _selectedAvatarIndex = null);
                     },
                     icon: Icon(Icons.refresh_rounded, size: 16, color: context.textSecondary),
                     label: Text('Nueva generación', style: TextStyle(fontSize: 12, color: context.textSecondary)),
@@ -1018,18 +982,20 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
     );
   }
 
-  Widget _buildActionButtons(BuildContext context) {
+  Widget _buildActionButtons(BuildContext context, GeneratorState genState, MergedVideoResult result) {
     return Row(
       children: [
         _buildActionChip(
           context,
-          icon: _historyAlreadySaved
+          icon: genState.historyAlreadySaved
               ? Icons.bookmark_rounded
-              : (_isSavingHistory ? null : Icons.bookmark_add_outlined),
-          label: _historyAlreadySaved ? 'En historial' : 'Historial',
-          color: _historyAlreadySaved ? AppColors.success : AppColors.primary,
-          loading: _isSavingHistory,
-          onTap: (_isSavingHistory || _historyAlreadySaved) ? null : _saveToHistory,
+              : (genState.isSavingHistory ? null : Icons.bookmark_add_outlined),
+          label: genState.historyAlreadySaved ? 'En historial' : 'Historial',
+          color: genState.historyAlreadySaved ? AppColors.success : AppColors.primary,
+          loading: genState.isSavingHistory,
+          onTap: (genState.isSavingHistory || genState.historyAlreadySaved)
+              ? null
+              : () => ref.read(generatorNotifierProvider.notifier).saveCurrentResultToHistory(),
         ),
         const SizedBox(width: 8),
         _buildActionChip(
@@ -1038,7 +1004,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
           label: 'Compartir',
           color: AppColors.accent,
           loading: _isSharing,
-          onTap: _isSharing ? null : _shareViaWhatsApp,
+          onTap: _isSharing ? null : () => _shareViaWhatsApp(result),
         ),
         const SizedBox(width: 8),
         _buildActionChip(
@@ -1047,7 +1013,7 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
           label: 'Descargar',
           color: AppColors.primary,
           loading: false,
-          onTap: _downloadVideo,
+          onTap: () => _downloadVideo(result),
         ),
       ],
     );

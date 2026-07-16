@@ -10,11 +10,15 @@ class AppConstants {
   /// Tiempo antes del cierre en el que se muestra la advertencia al usuario.
   static const sessionWarningBefore = Duration(seconds: 30);
 
-  // API – Cambiar según entorno:
-  //   Dispositivo físico → IP de tu PC en la red (ej. http://192.168.1.X:8080)
+  // API – URL de producción.
+  // Para desarrollo local, sobreescribe en un archivo local no commiteado
+  // o usa --dart-define=API_BASE_URL=http://10.252.238.227:8080 al compilar.
+  //   Dispositivo físico → http://192.168.1.X:8080
   //   Emulador Android  → http://10.0.2.2:8080
-  //   Producción        → https://aprendia.angeldev.fun
-  static const apiBaseUrl = 'http://10.252.238.227:8080';
+  static const apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://aprendia.angeldev.fun',
+  );
 
   // --> Claves para almacén encriptado (datos de sesión)
 

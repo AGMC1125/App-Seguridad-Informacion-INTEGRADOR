@@ -3,6 +3,7 @@ import '../../../../core/services/notification_service.dart';
 import '../../../../core/services/sensitive_data_service.dart';
 import '../../../../core/services/session_service.dart';
 import '../../../../core/di/providers.dart';
+import '../../domain/entities/auth_status.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 // ── Estado de sesión ──────────────────────────────────────────────────────────
@@ -19,6 +20,13 @@ class SessionState {
   final int warningSecondsRemaining;
   final bool wasRemoteWiped;
 
+  // ── Auth operation status ─────────────────────────────────────────────────
+  /// Estado de la última operación de autenticación (login / register).
+  final AuthStatus authStatus;
+
+  /// Mensaje de error cuando [authStatus] == [AuthStatus.error]. Null en otros casos.
+  final String? authError;
+
   const SessionState({
     this.isLoggedIn = false,
     this.token = '',
@@ -27,6 +35,8 @@ class SessionState {
     this.isSessionWarning = false,
     this.warningSecondsRemaining = 0,
     this.wasRemoteWiped = false,
+    this.authStatus = AuthStatus.idle,
+    this.authError,
   });
 
   SessionState copyWith({
@@ -37,6 +47,10 @@ class SessionState {
     bool? isSessionWarning,
     int? warningSecondsRemaining,
     bool? wasRemoteWiped,
+    AuthStatus? authStatus,
+    // Usar clearAuthError: true para forzar null explícitamente en copyWith.
+    String? authError,
+    bool clearAuthError = false,
   }) {
     return SessionState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
@@ -47,6 +61,8 @@ class SessionState {
       warningSecondsRemaining:
           warningSecondsRemaining ?? this.warningSecondsRemaining,
       wasRemoteWiped: wasRemoteWiped ?? this.wasRemoteWiped,
+      authStatus: authStatus ?? this.authStatus,
+      authError: clearAuthError ? null : (authError ?? this.authError),
     );
   }
 
@@ -62,6 +78,8 @@ class SessionState {
 /// - Delega operaciones de datos a los use cases correspondientes.
 /// - Gestiona el timer de inactividad vía [SessionService].
 /// - Registra el callback de borrado remoto en [NotificationService].
+/// - Emite [AuthStatus] en [SessionState.authStatus] para que la UI reaccione
+///   sin lógica propia (idle → loading → success | error).
 ///
 /// NO contiene lógica HTTP ni de almacenamiento — eso vive en la capa de datos.
 class SessionNotifier extends Notifier<SessionState> {
@@ -72,10 +90,20 @@ class SessionNotifier extends Notifier<SessionState> {
 
   // ── Autenticación ─────────────────────────────────────────────────────────
 
-  /// Autentica al usuario. Devuelve mensaje de error o null si tuvo éxito.
-  Future<String?> login(String email, String password) async {
+  /// Autentica al usuario.
+  ///
+  /// Emite [AuthStatus.loading] → [AuthStatus.success] | [AuthStatus.error].
+  /// La UI observa [SessionState.authStatus] y [SessionState.authError];
+  /// no necesita lógica de manejo de resultado en el widget.
+  Future<void> login(String email, String password) async {
+    state = state.copyWith(
+      authStatus: AuthStatus.loading,
+      clearAuthError: true,
+    );
+
     try {
-      final session = await ref.read(loginUseCaseProvider).call(email, password);
+      final session =
+          await ref.read(loginUseCaseProvider).call(email, password);
 
       state = state.copyWith(
         isLoggedIn: true,
@@ -83,6 +111,8 @@ class SessionNotifier extends Notifier<SessionState> {
         userName: session.userName,
         userEmail: session.userEmail,
         wasRemoteWiped: false,
+        authStatus: AuthStatus.success,
+        clearAuthError: true,
       );
 
       // Iniciar timer de inactividad
@@ -93,26 +123,41 @@ class SessionNotifier extends Notifier<SessionState> {
 
       // Registrar callback de borrado remoto (FCM foreground)
       NotificationService.onRemoteWipe = _handleRemoteWipe;
-
-      return null;
     } on AuthException catch (e) {
-      return e.message;
+      state = state.copyWith(
+        authStatus: AuthStatus.error,
+        authError: e.message,
+      );
     }
   }
 
-  /// Registra un nuevo usuario. Devuelve mensaje de error o null si tuvo éxito.
-  Future<String?> register({
+  /// Registra un nuevo usuario.
+  ///
+  /// Emite [AuthStatus.loading] → [AuthStatus.success] | [AuthStatus.error].
+  Future<void> register({
     required String name,
     required String email,
     required String password,
   }) async {
+    state = state.copyWith(
+      authStatus: AuthStatus.loading,
+      clearAuthError: true,
+    );
+
     try {
       await ref
           .read(registerUseCaseProvider)
           .call(name: name, email: email, password: password);
-      return null;
+
+      state = state.copyWith(
+        authStatus: AuthStatus.success,
+        clearAuthError: true,
+      );
     } on AuthException catch (e) {
-      return e.message;
+      state = state.copyWith(
+        authStatus: AuthStatus.error,
+        authError: e.message,
+      );
     }
   }
 
@@ -187,6 +232,16 @@ class SessionNotifier extends Notifier<SessionState> {
   /// Limpia la bandera de borrado remoto tras mostrar el aviso en UI.
   void clearWipeFlag() {
     state = state.copyWith(wasRemoteWiped: false);
+  }
+
+  /// Resetea [authStatus] a [AuthStatus.idle] y limpia [authError].
+  ///
+  /// Llamar al salir de las pantallas de auth para evitar estados residuales.
+  void clearAuthStatus() {
+    state = state.copyWith(
+      authStatus: AuthStatus.idle,
+      clearAuthError: true,
+    );
   }
 
   // ── Callbacks privados ────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../theme/app_theme.dart';
+import '../../domain/entities/auth_status.dart';
 import '../providers/session_notifier.dart';
 import 'register_screen.dart';
 
@@ -15,11 +16,11 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  // ── Lógica de formulario (SIN CAMBIOS)
+  // ── Lógica de formulario
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
+  // _isLoading eliminado — el estado de carga viene de SessionState.authStatus
 
   // ── Estado de visibilidad de contraseña
   bool _obscurePassword = true;
@@ -34,35 +35,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _passwordController.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
+    // Limpiar authStatus para no dejar estado residual al salir de la pantalla
+    ref.read(sessionNotifierProvider.notifier).clearAuthStatus();
     super.dispose();
   }
 
-  // ── Login logic (SIN CAMBIOS)
+  // ── Login logic
   Future<void> _onLogin() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-
-    final error = await ref.read(sessionNotifierProvider.notifier).login(
+    // SessionNotifier emite loading → success | error en SessionState.authStatus
+    // El widget reacciona vía ref.watch (spinner) y ref.listen (snackbar de error)
+    await ref.read(sessionNotifierProvider.notifier).login(
           _emailController.text.trim(),
           _passwordController.text,
         );
-
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error), backgroundColor: AppColors.error),
-      );
-    }
-    // Si error == null, SessionProvider notifica el cambio y
-    // main.dart navega automáticamente al HomeScreen.
+    // Si fue exitoso, SessionGuard detecta isLoggedIn=true y navega automáticamente
   }
 
   // ── Build
 
   @override
   Widget build(BuildContext context) {
+    // Efecto secundario: mostrar snackbar cuando authStatus cambia a error
+    ref.listen<SessionState>(sessionNotifierProvider, (prev, next) {
+      if (next.authStatus == AuthStatus.error && next.authError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.authError!),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    });
+
+    // El widget observa el estado — sin lógica de negocio aquí
+    final isLoading =
+        ref.watch(sessionNotifierProvider).authStatus == AuthStatus.loading;
+
     return Scaffold(
       backgroundColor: const Color(0xFF080E1A),
       body: Stack(
@@ -78,7 +87,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const Spacer(flex: 2),
                   _buildLogo(),
                   const Spacer(flex: 2),
-                  _buildFormCard(),
+                  _buildFormCard(isLoading),
                   const Spacer(flex: 1),
                 ],
               ),
@@ -186,7 +195,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildFormCard() {
+  Widget _buildFormCard(bool isLoading) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
@@ -301,7 +310,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             const SizedBox(height: 14),
             _buildGradientButton(
               text: 'Iniciar sesión',
-              isLoading: _isLoading,
+              isLoading: isLoading,
               onPressed: _onLogin,
             ),
 
