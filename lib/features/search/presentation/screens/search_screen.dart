@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../theme/app_theme.dart';
 import '../../../../features/auth/presentation/providers/session_notifier.dart';
-import '../../../dictionary/presentation/word_detail_screen.dart';
 import '../../di/search_providers.dart';
 import '../providers/search_notifier.dart';
 import '../providers/search_state.dart';
@@ -39,7 +40,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   void _navigateToWord(String word) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => WordDetailScreen(word: word)));
+    context.push(RouteNames.wordDetailPath(word));
   }
 
   @override

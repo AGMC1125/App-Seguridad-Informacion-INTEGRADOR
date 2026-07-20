@@ -1,11 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../core/router/route_names.dart';
 import '../features/auth/presentation/providers/session_notifier.dart';
 import '../theme/app_theme.dart';
-import '../features/profile/presentation/profile_screen.dart';
-import '../features/auth/presentation/screens/terms_and_conditions_screen.dart';
-import '../features/auth/presentation/screens/privacy_policy_screen.dart';
 
 /// Sidebar deslizante con efecto glassmorphism.
 /// Contiene: info del usuario, perfil, datos de seguridad, cerrar sesión.
@@ -114,10 +113,7 @@ class AppDrawer extends ConsumerWidget {
                           color: AppColors.primary,
                           onTap: () {
                             Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                            );
+                            context.push(RouteNames.profile);
                           },
                         ),
                         const SizedBox(height: 6),
@@ -163,12 +159,7 @@ class AppDrawer extends ConsumerWidget {
                           color: AppColors.violet,
                           onTap: () {
                             Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const TermsAndConditionsScreen(),
-                              ),
-                            );
+                            context.push(RouteNames.terms);
                           },
                         ),
                         const SizedBox(height: 6),
@@ -180,12 +171,7 @@ class AppDrawer extends ConsumerWidget {
                           color: AppColors.accent,
                           onTap: () {
                             Navigator.pop(context);
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const PrivacyPolicyScreen(),
-                              ),
-                            );
+                            context.push(RouteNames.privacy);
                           },
                         ),
                         const SizedBox(height: 20),

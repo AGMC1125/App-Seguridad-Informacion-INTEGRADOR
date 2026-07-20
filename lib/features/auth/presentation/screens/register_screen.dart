@@ -3,11 +3,11 @@ import 'package:flutter/gestures.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../theme/app_theme.dart';
 import '../../domain/entities/auth_status.dart';
 import '../providers/session_notifier.dart';
-import 'privacy_policy_screen.dart';
-import 'terms_and_conditions_screen.dart';
 
 // ─── Particle painter (reutilizado del login) ─────────────────────────────────
 
@@ -98,20 +98,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     super.initState();
 
     _privacyTapRecognizer = TapGestureRecognizer()
-      ..onTap = () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
-        );
-      };
+      ..onTap = () => context.push(RouteNames.privacy);
 
     _termsTapRecognizer = TapGestureRecognizer()
-      ..onTap = () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const TermsAndConditionsScreen()),
-        );
-      };
+      ..onTap = () => context.push(RouteNames.terms);
 
     _particleCtrl = AnimationController(
       vsync: this,

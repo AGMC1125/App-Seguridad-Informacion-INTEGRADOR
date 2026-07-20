@@ -1,10 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../theme/app_theme.dart';
 import '../../domain/entities/auth_status.dart';
 import '../providers/session_notifier.dart';
-import 'register_screen.dart';
 
 // ─── LoginScreen ──────────────────────────────────────────────────────────────
 
@@ -339,11 +340,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
             _buildOutlineButton(
               text: 'Crear cuenta nueva',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const RegisterScreen()),
-              ),
+              onPressed: () => context.push(RouteNames.register),
             ),
           ],
         ),

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_constants.dart';
+import 'core/router/app_router.dart';
 import 'core/services/encrypted_storage_service.dart';
 import 'core/services/security_service.dart';
 import 'core/services/session_service.dart';
 import 'features/auth/presentation/providers/session_notifier.dart';
-import 'features/auth/presentation/widgets/session_guard.dart';
 import 'theme/app_theme.dart';
 
 /// Raíz de la aplicación Flutter con gestión de ciclo de vida.
@@ -177,13 +177,15 @@ class _AprendIAAppState extends ConsumerState<AprendIAApp>
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    final router = ref.watch(appRouterProvider);
+
+    return MaterialApp.router(
       title: 'VirtualSign LSM',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      home: const SessionGuard(),
+      routerConfig: router,
     );
   }
 }

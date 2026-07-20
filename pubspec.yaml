@@ -45,6 +45,8 @@ dependencies:
   # Compartir archivos (video generado) y descargar
   share_plus: ^10.0.0
   path_provider: ^2.1.5
+  # Navegación declarativa con rutas nombradas y protegidas
+  go_router: ^14.0.0
 
 dev_dependencies:
   flutter_test:
