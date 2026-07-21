@@ -1,14 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../core/services/sensitive_data_service.dart';
 import '../../../../features/auth/presentation/providers/session_notifier.dart';
 import '../../../../theme/app_theme.dart';
 import '../../../../widgets/app_drawer.dart';
-import '../../../generator/presentation/screens/generator_screen.dart';
-import '../../../dictionary/presentation/family_screen.dart';
-import '../../../search/presentation/screens/search_screen.dart';
-import '../../../history/presentation/screens/history_screen.dart';
 
 // ---------------------------------------------------------------------------
 // HomeScreen — hub principal de navegación
@@ -77,7 +75,7 @@ class HomeScreen extends ConsumerWidget {
                           primaryColor: AppColors.primary,
                           gradientEnd: AppColors.primaryDark,
                           badge: 'A – Z',
-                          onTap: () => Navigator.push(context, _route(const GeneratorScreen())),
+                          onTap: () => context.push(RouteNames.generator),
                         ),
                         const SizedBox(height: 12),
                         _buildOptionCard(
@@ -89,7 +87,7 @@ class HomeScreen extends ConsumerWidget {
                           primaryColor: const Color(0xFF059669),
                           gradientEnd: AppColors.accent,
                           badge: '12 señas',
-                          onTap: () => Navigator.push(context, _route(const FamilyScreen())),
+                          onTap: () => context.push(RouteNames.family),
                         ),
                         const SizedBox(height: 12),
                         _buildOptionCard(
@@ -101,7 +99,7 @@ class HomeScreen extends ConsumerWidget {
                           primaryColor: AppColors.violet,
                           gradientEnd: const Color(0xFFA855F7),
                           badge: 'BM25',
-                          onTap: () => Navigator.push(context, _route(const SearchScreen())),
+                          onTap: () => context.push(RouteNames.search),
                         ),
                         const SizedBox(height: 12),
                         _buildOptionCard(
@@ -113,7 +111,7 @@ class HomeScreen extends ConsumerWidget {
                           primaryColor: const Color(0xFFD97706),
                           gradientEnd: const Color(0xFFF59E0B),
                           badge: 'MP4',
-                          onTap: () => Navigator.push(context, _route(const HistoryScreen())),
+                          onTap: () => context.push(RouteNames.history),
                         ),
                         const SizedBox(height: 28),
                         _buildStatsRow(context, isDark),
@@ -555,8 +553,6 @@ class HomeScreen extends ConsumerWidget {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-
-  Route _route(Widget screen) => MaterialPageRoute(builder: (_) => screen);
 
   IconData _sensitiveFieldIcon(String key) {
     if (key.contains('correo')) return Icons.email_outlined;

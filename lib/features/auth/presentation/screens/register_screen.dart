@@ -3,10 +3,11 @@ import 'package:flutter/gestures.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../theme/app_theme.dart';
+import '../../domain/entities/auth_status.dart';
 import '../providers/session_notifier.dart';
-import 'privacy_policy_screen.dart';
-import 'terms_and_conditions_screen.dart';
 
 // ─── Particle painter (reutilizado del login) ─────────────────────────────────
 
@@ -67,13 +68,13 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen>
     with TickerProviderStateMixin {
-  // ── Lógica del formulario (SIN CAMBIOS) ──────────────────────────────────
+  // ── Lógica del formulario ─────────────────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  bool _isLoading = false;
+  // _isLoading eliminado — el estado de carga viene de SessionState.authStatus
   bool _acceptTerms = false;
   late final TapGestureRecognizer _privacyTapRecognizer;
   late final TapGestureRecognizer _termsTapRecognizer;
@@ -97,20 +98,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     super.initState();
 
     _privacyTapRecognizer = TapGestureRecognizer()
-      ..onTap = () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
-        );
-      };
+      ..onTap = () => context.push(RouteNames.privacy);
 
     _termsTapRecognizer = TapGestureRecognizer()
-      ..onTap = () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const TermsAndConditionsScreen()),
-        );
-      };
+      ..onTap = () => context.push(RouteNames.terms);
 
     _particleCtrl = AnimationController(
       vsync: this,
@@ -143,10 +134,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     _emailFocus.dispose();
     _passFocus.dispose();
     _confirmFocus.dispose();
+    // Limpiar authStatus para no dejar estado residual al salir de la pantalla
+    ref.read(sessionNotifierProvider.notifier).clearAuthStatus();
     super.dispose();
   }
 
-  // ── Lógica de registro (SIN CAMBIOS) ────────────────────────────────────
+  // ── Lógica de registro ───────────────────────────────────────────────────
   void _onRegister() async {
     if (!_acceptTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -159,37 +152,44 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     }
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
-
-    final error = await ref.read(sessionNotifierProvider.notifier).register(
+    // SessionNotifier emite loading → success | error en SessionState.authStatus
+    // El widget reacciona vía ref.watch (spinner) y ref.listen (snackbar + pop)
+    await ref.read(sessionNotifierProvider.notifier).register(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(error), backgroundColor: AppColors.error),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Cuenta creada exitosamente!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      Navigator.pop(context);
-    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    // Efectos secundarios: snackbar de error y navegación al éxito
+    ref.listen<SessionState>(sessionNotifierProvider, (prev, next) {
+      if (next.authStatus == AuthStatus.error && next.authError != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.authError!),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      if (next.authStatus == AuthStatus.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Cuenta creada exitosamente!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    });
+
+    // El widget observa el estado — sin lógica de negocio aquí
+    final isLoading =
+        ref.watch(sessionNotifierProvider).authStatus == AuthStatus.loading;
+
     return Scaffold(
       backgroundColor: const Color(0xFF080E1A),
       body: AnimatedBuilder(
@@ -220,7 +220,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             const SizedBox(height: 16),
                             _buildHeader(),
                             const SizedBox(height: 28),
-                            _buildFormCard(),
+                            _buildFormCard(isLoading),
                             const SizedBox(height: 32),
                           ],
                         ),
@@ -372,7 +372,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     );
   }
 
-  Widget _buildFormCard() {
+  Widget _buildFormCard(bool isLoading) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
@@ -502,7 +502,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
             // ── Botón crear cuenta ────────────────────────────────────────
             _buildGradientButton(
               text: 'Crear cuenta',
-              isLoading: _isLoading,
+              isLoading: isLoading,
               onPressed: _onRegister,
             ),
             const SizedBox(height: 20),

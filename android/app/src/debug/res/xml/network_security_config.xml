@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Configuración de seguridad de red — DEBUG únicamente
+  - Hereda la config base (solo HTTPS) para todo el tráfico.
+  - Agrega excepción de cleartext SOLO para la IP del servidor de desarrollo
+    en la red local, necesaria para pruebas durante el desarrollo.
+  - Este archivo NUNCA se incluye en builds de release/producción.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+            <!-- Permite certificados de usuario/CA personales en debug -->
+            <certificates src="user"/>
+        </trust-anchors>
+    </base-config>
+
+    <!-- Excepción de desarrollo: servidor API local en red universitaria -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.252.238.227</domain>
+        <!-- Emulador Android apunta a la máquina host vía esta IP -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../screens/security_check_screen.dart';
-import '../../../../features/home/presentation/screens/home_screen.dart';
 import '../../../../shared/widgets/activity_detector.dart';
 import '../providers/session_notifier.dart';
 
-/// Widget guardián de sesión.
+/// Widget guardián de sesión — shell de rutas autenticadas.
 ///
-/// Responsabilidad única: observar el [SessionState] y decidir qué pantalla
-/// mostrar (login o home), además de reaccionar a eventos de sesión
-/// (advertencias de inactividad y borrado remoto) mostrando los SnackBars
-/// correspondientes.
+/// Responsabilidad única: envolver todas las pantallas autenticadas con
+/// [ActivityDetector] y reaccionar a eventos de sesión (advertencia de
+/// inactividad y borrado remoto) mostrando los [SnackBar] correspondientes.
 ///
-/// Toda la lógica de datos ya fue resuelta por [SessionNotifier] —
-/// este widget solo presenta información al usuario.
+/// La decisión de QUÉ pantalla mostrar ya no vive aquí — el redirect de
+/// [GoRouter] en [appRouterProvider] es el único responsable de esa lógica.
+///
+/// Este widget se inyecta automáticamente en todas las rutas protegidas
+/// mediante el [ShellRoute] definido en [appRouterProvider].
 class SessionGuard extends ConsumerStatefulWidget {
-  const SessionGuard({super.key});
+  /// Pantalla activa entregada por el ShellRoute de GoRouter.
+  final Widget child;
+
+  const SessionGuard({super.key, required this.child});
 
   @override
   ConsumerState<SessionGuard> createState() => _SessionGuardState();
@@ -32,18 +35,10 @@ class _SessionGuardState extends ConsumerState<SessionGuard> {
       _handleRemoteWipeNotification(next);
     });
 
-    final session = ref.watch(sessionNotifierProvider);
-
-    if (session.isLoggedIn) {
-      return ActivityDetector(
-        onActivity: ref
-            .read(sessionNotifierProvider.notifier)
-            .registerActivity,
-        child: const HomeScreen(),
-      );
-    }
-
-    return const SecurityCheckScreen();
+    return ActivityDetector(
+      onActivity: ref.read(sessionNotifierProvider.notifier).registerActivity,
+      child: widget.child,
+    );
   }
 
   // ── Manejo de advertencia de sesión por inactividad ───────────────────────

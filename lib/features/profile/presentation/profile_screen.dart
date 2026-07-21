@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/presentation/providers/session_notifier.dart';
 import '../../../theme/app_theme.dart';
+import 'providers/profile_notifier.dart';
+import 'providers/profile_state.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -12,27 +14,24 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  // Edit profile
-  final _nameCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  bool _savingProfile = false;
-
-  // Change password
-  final _currentPasswordCtrl = TextEditingController();
-  final _newPasswordCtrl = TextEditingController();
-  final _confirmPasswordCtrl = TextEditingController();
-  bool _changingPassword = false;
-  bool _showCurrentPwd = false;
-  bool _showNewPwd = false;
-  bool _showConfirmPwd = false;
-
-  bool _deletingAccount = false;
+  // ── Estado local puro de UI ────────────────────────────────────────────────
+  // Las operaciones (saveProfile, changePassword, deleteAccount) y sus estados
+  // de carga/error viven en ProfileNotifier.
+  // Solo se mantienen aquí los controladores y la visibilidad de contraseñas.
+  final _nameCtrl             = TextEditingController();
+  final _emailCtrl            = TextEditingController();
+  final _currentPasswordCtrl  = TextEditingController();
+  final _newPasswordCtrl      = TextEditingController();
+  final _confirmPasswordCtrl  = TextEditingController();
+  bool _showCurrentPwd  = false;
+  bool _showNewPwd      = false;
+  bool _showConfirmPwd  = false;
 
   @override
   void initState() {
     super.initState();
     final session = ref.read(sessionNotifierProvider);
-    _nameCtrl.text = session.userName;
+    _nameCtrl.text  = session.userName;
     _emailCtrl.text = session.userEmail;
   }
 
@@ -43,6 +42,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _currentPasswordCtrl.dispose();
     _newPasswordCtrl.dispose();
     _confirmPasswordCtrl.dispose();
+    // Limpia el estado del notifier al salir de la pantalla
+    ref.read(profileNotifierProvider.notifier).reset();
     super.dispose();
   }
 
@@ -51,25 +52,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _saveProfile() async {
-    final name = _nameCtrl.text.trim();
+    final name  = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim();
     if (name.isEmpty && email.isEmpty) return;
-
-    setState(() => _savingProfile = true);
-    final error = await ref.read(sessionNotifierProvider.notifier).updateProfile(name: name, email: email);
-    if (!mounted) return;
-    setState(() => _savingProfile = false);
-
-    if (error == null) {
-      _showSnack('Perfil actualizado', AppColors.success);
-    } else {
-      _showSnack(error, AppColors.error);
-    }
+    await ref.read(profileNotifierProvider.notifier).saveProfile(
+      name: name,
+      email: email,
+    );
   }
 
   Future<void> _changePassword() async {
     final current = _currentPasswordCtrl.text;
-    final newPwd = _newPasswordCtrl.text;
+    final newPwd  = _newPasswordCtrl.text;
     final confirm = _confirmPasswordCtrl.text;
 
     if (current.isEmpty || newPwd.isEmpty || confirm.isEmpty) {
@@ -85,22 +79,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return;
     }
 
-    setState(() => _changingPassword = true);
-    final error = await ref.read(sessionNotifierProvider.notifier).changePassword(
+    await ref.read(profileNotifierProvider.notifier).changePassword(
       currentPassword: current,
       newPassword: newPwd,
     );
-    if (!mounted) return;
-    setState(() => _changingPassword = false);
-
-    if (error == null) {
-      _currentPasswordCtrl.clear();
-      _newPasswordCtrl.clear();
-      _confirmPasswordCtrl.clear();
-      _showSnack('Contraseña actualizada', AppColors.success);
-    } else {
-      _showSnack(error, AppColors.error);
-    }
   }
 
   Future<void> _deleteAccount() async {
@@ -129,20 +111,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
 
     if (confirm != true || !mounted) return;
-
-    setState(() => _deletingAccount = true);
-    final error = await ref.read(sessionNotifierProvider.notifier).deleteAccount();
-    if (!mounted) return;
-
-    if (error != null) {
-      setState(() => _deletingAccount = false);
-      _showSnack(error, AppColors.error);
-    }
-    // Si deleteAccount tuvo éxito el SessionProvider llamó _clearState() y
-    // notifyListeners(), por lo que el Navigator raíz redirigirá al login.
+    await ref.read(profileNotifierProvider.notifier).deleteAccount();
   }
 
   void _showSnack(String msg, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg, style: const TextStyle(color: Colors.white)),
@@ -161,6 +134,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final session = ref.watch(sessionNotifierProvider);
 
+    // ── Side effects vía ref.listen ─────────────────────────────────────────
+    ref.listen<ProfileState>(profileNotifierProvider, (prev, next) {
+      // Guardar perfil
+      if (next.saveProfileStatus != prev?.saveProfileStatus) {
+        if (next.saveProfileStatus == ProfileOperationStatus.success) {
+          _showSnack('Perfil actualizado', AppColors.success);
+        } else if (next.saveProfileStatus == ProfileOperationStatus.error &&
+            next.saveProfileError != null) {
+          _showSnack(next.saveProfileError!, AppColors.error);
+        }
+      }
+      // Cambiar contraseña
+      if (next.changePasswordStatus != prev?.changePasswordStatus) {
+        if (next.changePasswordStatus == ProfileOperationStatus.success) {
+          _currentPasswordCtrl.clear();
+          _newPasswordCtrl.clear();
+          _confirmPasswordCtrl.clear();
+          _showSnack('Contraseña actualizada', AppColors.success);
+        } else if (next.changePasswordStatus == ProfileOperationStatus.error &&
+            next.changePasswordError != null) {
+          _showSnack(next.changePasswordError!, AppColors.error);
+        }
+      }
+      // Eliminar cuenta
+      if (next.deleteAccountStatus == ProfileOperationStatus.error &&
+          next.deleteAccountError != null &&
+          next.deleteAccountError != prev?.deleteAccountError) {
+        _showSnack(next.deleteAccountError!, AppColors.error);
+      }
+    });
+
+    final profileState = ref.watch(profileNotifierProvider);
     final isDark = context.isDark;
 
     return Container(
@@ -233,9 +238,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 16),
                   _buildPrimaryButton(
                     context,
-                    label: _savingProfile ? 'Guardando…' : 'Guardar cambios',
-                    loading: _savingProfile,
-                    onTap: _savingProfile ? null : _saveProfile,
+                    label: profileState.isSavingProfile ? 'Guardando…' : 'Guardar cambios',
+                    loading: profileState.isSavingProfile,
+                    onTap: profileState.isSavingProfile ? null : _saveProfile,
                   ),
                 ],
               ),
@@ -275,9 +280,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 16),
                   _buildPrimaryButton(
                     context,
-                    label: _changingPassword ? 'Actualizando…' : 'Cambiar contraseña',
-                    loading: _changingPassword,
-                    onTap: _changingPassword ? null : _changePassword,
+                    label: profileState.isChangingPassword ? 'Actualizando…' : 'Cambiar contraseña',
+                    loading: profileState.isChangingPassword,
+                    onTap: profileState.isChangingPassword ? null : _changePassword,
                   ),
                 ],
               ),
@@ -310,14 +315,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _deletingAccount ? null : _deleteAccount,
-                      icon: _deletingAccount
+                      onPressed: profileState.isDeletingAccount ? null : _deleteAccount,
+                      icon: profileState.isDeletingAccount
                           ? const SizedBox(
                               width: 14, height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.error))
                           : const Icon(Icons.delete_forever_rounded, size: 18, color: AppColors.error),
                       label: Text(
-                          _deletingAccount ? 'Eliminando…' : 'Eliminar mi cuenta',
+                          profileState.isDeletingAccount ? 'Eliminando…' : 'Eliminar mi cuenta',
                           style: const TextStyle(color: AppColors.error, fontSize: 13)),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.error),

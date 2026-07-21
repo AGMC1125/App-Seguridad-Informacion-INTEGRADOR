@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/router/route_names.dart';
 import '../../../theme/app_theme.dart';
-import 'word_detail_screen.dart';
 
 // ---------------------------------------------------------------------------
 // FamilyScreen — diccionario de familia LSM
@@ -219,14 +220,9 @@ class _FamilyScreenState extends State<FamilyScreen> {
     final color = cardColors[index % cardColors.length];
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WordDetailScreen(
-            word: word.word,
-            initialAvatarCode: _selectedAvatarCode,
-          ),
-        ),
+      onTap: () => context.push(
+        RouteNames.wordDetailPath(word.word),
+        extra: _selectedAvatarCode,
       ),
       child: Container(
         decoration: BoxDecoration(

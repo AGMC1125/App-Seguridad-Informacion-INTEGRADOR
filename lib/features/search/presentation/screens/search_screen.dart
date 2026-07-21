@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/router/route_names.dart';
 import '../../../../theme/app_theme.dart';
 import '../../../../features/auth/presentation/providers/session_notifier.dart';
-import '../../../dictionary/presentation/word_detail_screen.dart';
 import '../../di/search_providers.dart';
-import '../../domain/entities/sign_suggestion.dart';
+import '../providers/search_notifier.dart';
+import '../providers/search_state.dart';
 
 // ---------------------------------------------------------------------------
 // SearchScreen — buscador semántico BM25
@@ -18,10 +20,10 @@ class SearchScreen extends ConsumerStatefulWidget {
 }
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
+  // ── Estado local puro de UI ────────────────────────────────────────────────
+  // El estado de búsqueda (results, loading, hasSearched) vive en SearchNotifier.
+  // Solo se mantiene aquí el controlador del campo de texto — ciclo de vida del widget.
   final _searchController = TextEditingController();
-  List<SignSuggestion> _results = [];
-  bool _loading = false;
-  bool _hasSearched = false;
 
   static const _allFamilyWords = [
     'abuelo', 'abuela', 'papa', 'mama',
@@ -32,30 +34,21 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    // Limpiar estado del notifier al salir de la pantalla
+    ref.read(searchNotifierProvider.notifier).clear();
     super.dispose();
   }
 
-  Future<void> _search(String query) async {
-    if (query.trim().isEmpty) {
-      setState(() { _results = []; _hasSearched = false; });
-      return;
-    }
-    setState(() { _loading = true; _hasSearched = true; });
-
-    final token = ref.read(sessionNotifierProvider).token;
-    final results = await ref
-        .read(searchSignsUseCaseProvider)
-        .call(token: token, query: query.trim());
-
-    if (mounted) setState(() { _results = results; _loading = false; });
-  }
-
   void _navigateToWord(String word) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => WordDetailScreen(word: word)));
+    context.push(RouteNames.wordDetailPath(word));
   }
 
   @override
   Widget build(BuildContext context) {
+    // ── Observar estado del notifier ──────────────────────────────────────
+    final searchState = ref.watch(searchNotifierProvider);
+    final isLoading = searchState.status == SearchStatus.loading;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -89,8 +82,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 controller: _searchController,
                 style: TextStyle(fontSize: 15, color: context.textPrimary),
                 textInputAction: TextInputAction.search,
-                onChanged: _search,
-                onSubmitted: _search,
+                onChanged: (query) {
+                  final token = ref.read(sessionNotifierProvider).token;
+                  ref.read(searchNotifierProvider.notifier).search(query, token);
+                  // Forzar rebuild del suffixIcon (que depende del texto del controlador)
+                  setState(() {});
+                },
+                onSubmitted: (query) {
+                  final token = ref.read(sessionNotifierProvider).token;
+                  ref.read(searchNotifierProvider.notifier).search(query, token);
+                },
                 decoration: InputDecoration(
                   hintText: 'Busca una seña… ej: padre, madre',
                   hintStyle: TextStyle(color: context.textSecondary.withOpacity(0.5), fontSize: 14),
@@ -104,7 +105,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           icon: Icon(Icons.close_rounded, color: context.textSecondary, size: 18),
                           onPressed: () {
                             _searchController.clear();
-                            setState(() { _results = []; _hasSearched = false; });
+                            ref.read(searchNotifierProvider.notifier).clear();
+                            setState(() {});
                           },
                         )
                       : null,
@@ -138,25 +140,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             const SizedBox(height: 24),
 
             // ── Results ────────────────────────────────────────────────────
-            if (_loading)
+            if (isLoading)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
                   child: CircularProgressIndicator(color: AppColors.primary),
                 ),
               )
-            else if (_hasSearched && _results.isNotEmpty) ...[
+            else if (searchState.hasSearched && searchState.results.isNotEmpty) ...[
               Text('Resultados', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: context.textPrimary)),
               const SizedBox(height: 12),
-              ..._results.map((r) => _buildResultCard(context, r)),
+              ...searchState.results.map((r) => _buildResultCard(context, r, searchState)),
               const SizedBox(height: 8),
             ]
-            else if (_hasSearched && _results.isEmpty) ...[
+            else if (searchState.hasSearched && searchState.results.isEmpty) ...[
               _buildNoResultsBanner(context),
               const SizedBox(height: 24),
             ],
 
-            _buildSuggestionSection(context),
+            _buildSuggestionSection(context, searchState),
             const SizedBox(height: 30),
           ],
         ),
@@ -164,9 +166,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  double _normalizeScore(double score) {
-    if (_results.isEmpty) return 0;
-    final maxScore = _results.map((r) => r.score).reduce((a, b) => a > b ? a : b);
+  double _normalizeScore(double score, SearchState searchState) {
+    if (searchState.results.isEmpty) return 0;
+    final maxScore = searchState.results.map((r) => r.score).reduce((a, b) => a > b ? a : b);
     if (maxScore == 0) return 0;
     return (score / maxScore).clamp(0.0, 1.0);
   }
@@ -177,9 +179,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return AppColors.warning;
   }
 
-  Widget _buildResultCard(BuildContext context, SignSuggestion result) {
+  Widget _buildResultCard(BuildContext context, result, SearchState searchState) {
     final score = (result.score * 100).round();
-    final normalized = _normalizeScore(result.score);
+    final normalized = _normalizeScore(result.score, searchState);
     final barColor = _barColor(normalized);
 
     return GestureDetector(
@@ -304,7 +306,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     );
   }
 
-  Widget _buildSuggestionSection(BuildContext context) {
+  Widget _buildSuggestionSection(BuildContext context, SearchState searchState) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -313,7 +315,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             const Icon(Icons.lightbulb_outline_rounded, size: 16, color: AppColors.accent),
             const SizedBox(width: 6),
             Text(
-              _hasSearched && _results.isEmpty
+              searchState.hasSearched && searchState.results.isEmpty
                   ? 'Tal vez te pueda interesar…'
                   : 'Todo el vocabulario disponible',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: context.textPrimary),
