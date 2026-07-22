@@ -11,6 +11,7 @@ import '../../../../features/auth/presentation/providers/session_notifier.dart';
 import '../../../../theme/app_theme.dart';
 import '../../di/generator_providers.dart';
 import '../../domain/entities/merged_video_result.dart';
+import '../../domain/entities/sign_interpretation.dart';
 import '../providers/generator_notifier.dart';
 import '../providers/generator_state.dart';
 
@@ -784,6 +785,10 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
                 _buildActionButtons(context, genState, result),
                 const SizedBox(height: 14),
                 _buildTextTokens(context, result),
+                if (result.interpretations.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _buildInterpretations(context, result.interpretations),
+                ],
                 if (result.unsupportedCharacters.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   _buildUnsupportedChips(result.unsupportedCharacters),
@@ -840,6 +845,49 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
                 const SizedBox(width: 4),
                 Text(t.toUpperCase(),
                     style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          )).toList(),
+        ),
+      ],
+    );
+  }
+
+  /// Muestra las palabras que la corrección semántica (ML) reinterpretó,
+  /// p.ej. "padre → PAPÁ". Hace visible el componente de ML para el usuario.
+  Widget _buildInterpretations(
+      BuildContext context, List<SignInterpretation> interpretations) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.auto_awesome_rounded, size: 13, color: AppColors.accent),
+            const SizedBox(width: 5),
+            Text('Interpretamos tu texto',
+                style: TextStyle(fontSize: 11, color: context.textSecondary, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6, runSpacing: 6,
+          children: interpretations.map((i) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.accent.withOpacity(0.28)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(i.original,
+                    style: TextStyle(fontSize: 11, color: context.textSecondary)),
+                const SizedBox(width: 4),
+                const Icon(Icons.arrow_forward_rounded, size: 11, color: AppColors.accent),
+                const SizedBox(width: 4),
+                Text(i.interpreted.toUpperCase(),
+                    style: const TextStyle(fontSize: 11, color: AppColors.accent, fontWeight: FontWeight.w700)),
               ],
             ),
           )).toList(),
