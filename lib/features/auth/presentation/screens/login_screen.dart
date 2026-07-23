@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/utils/validators.dart';
 import '../../../../theme/app_theme.dart';
 import '../../domain/entities/auth_status.dart';
 import '../providers/session_notifier.dart';
@@ -256,19 +257,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               nextFocusNode: _passwordFocus,
               textInputAction: TextInputAction.next,
               keyboardType: TextInputType.emailAddress,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Por favor ingresa tu correo';
-                }
-                if (!value.contains('@')) {
-                  return 'Ingresa un correo válido';
-                }
-                return null;
-              },
+              validator: Validators.email,
             ),
             const SizedBox(height: 16),
 
-            // ── Contraseña (validadores SIN CAMBIOS) ─────────────────────
+            // ── Contraseña (validación centralizada en Validators) ───────
             _buildField(
               label: 'Contraseña',
               hint: 'Mínimo 8 caracteres',
@@ -278,15 +271,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               textInputAction: TextInputAction.done,
               onSubmitted: _onLogin,
               isPassword: true,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Por favor ingresa tu contraseña';
-                }
-                if (value.length < 8) {
-                  return 'La contraseña debe tener al menos 8 caracteres';
-                }
-                return null;
-              },
+              validator: Validators.password,
             ),
 
             const SizedBox(height: 4),

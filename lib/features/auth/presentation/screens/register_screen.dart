@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/route_names.dart';
+import '../../../../core/utils/validators.dart';
 import '../../../../theme/app_theme.dart';
 import '../../domain/entities/auth_status.dart';
 import '../providers/session_notifier.dart';
@@ -410,19 +411,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
               focusNode: _nameFocus,
               nextFocusNode: _emailFocus,
               textInputAction: TextInputAction.next,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Por favor ingresa tu nombre';
-                }
-                if (value.trim().length < 3) {
-                  return 'Ingresa tu nombre completo';
-                }
-                return null;
-              },
+              validator: Validators.name,
             ),
             const SizedBox(height: 16),
 
-            // ── Correo electrónico (validadores SIN CAMBIOS) ──────────────
+            // ── Correo electrónico (validación centralizada) ─────────────
             _buildField(
               label: 'Correo electrónico',
               hint: 'ejemplo@correo.com',
@@ -432,20 +425,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
               nextFocusNode: _passFocus,
               textInputAction: TextInputAction.next,
               keyboardType: TextInputType.emailAddress,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Por favor ingresa tu correo';
-                }
-                if (!RegExp(r'^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$')
-                    .hasMatch(value)) {
-                  return 'Ingresa un correo válido';
-                }
-                return null;
-              },
+              validator: Validators.email,
             ),
             const SizedBox(height: 16),
 
-            // ── Contraseña (validadores SIN CAMBIOS) ─────────────────────
+            // ── Contraseña (validación centralizada) ─────────────────────
             _buildField(
               label: 'Contraseña',
               hint: 'Mínimo 8 caracteres',
@@ -458,19 +442,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
               obscureValue: _obscurePassword,
               onToggleObscure: () =>
                   setState(() => _obscurePassword = !_obscurePassword),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Por favor ingresa una contraseña';
-                }
-                if (value.length < 8) {
-                  return 'La contraseña debe tener al menos 8 caracteres';
-                }
-                return null;
-              },
+              validator: Validators.passwordStrength,
             ),
             const SizedBox(height: 16),
 
-            // ── Confirmar contraseña (validadores SIN CAMBIOS) ────────────
+            // ── Confirmar contraseña (validación centralizada) ───────────
             _buildField(
               label: 'Confirmar contraseña',
               hint: 'Repite tu contraseña',
@@ -483,15 +459,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
               obscureValue: _obscureConfirm,
               onToggleObscure: () =>
                   setState(() => _obscureConfirm = !_obscureConfirm),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Por favor confirma tu contraseña';
-                }
-                if (value != _passwordController.text) {
-                  return 'Las contraseñas no coinciden';
-                }
-                return null;
-              },
+              validator: (value) =>
+                  Validators.confirmPassword(value, _passwordController.text),
             ),
             const SizedBox(height: 20),
 
