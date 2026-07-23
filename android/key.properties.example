@@ -1,0 +1,7 @@
+# Plantilla de credenciales de firma. Copia este archivo como
+# android/key.properties y rellena con tus valores reales.
+# key.properties NUNCA se versiona (está en .gitignore).
+storePassword=TU_PASSWORD_DEL_STORE
+keyPassword=TU_PASSWORD_DE_LA_LLAVE
+keyAlias=tu_alias
+storeFile=../../tu_keystore.keystore
