@@ -1,9 +1,21 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android Gradle plugin.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
+}
+
+// Credenciales de firma: se leen de android/key.properties, que NO se versiona
+// (está en .gitignore). Así el keystore y sus contraseñas no viven en el código.
+// Ver key.properties.example para el formato.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -23,10 +35,13 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("../../virtualsign.keystore")
-            storePassword = "VirtualSign2026"
-            keyAlias = "virtualsign"
-            keyPassword = "VirtualSign2026"
+            // Los valores vienen de android/key.properties (no versionado).
+            // Si el archivo no existe (p. ej. en un checkout limpio), estas
+            // propiedades quedan nulas y solo fallará el build de release.
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            storeFile = (keystoreProperties["storeFile"] as String?)?.let { file(it) }
+            storePassword = keystoreProperties["storePassword"] as String?
         }
     }
 
