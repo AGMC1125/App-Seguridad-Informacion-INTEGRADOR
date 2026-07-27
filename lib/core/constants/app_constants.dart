@@ -17,7 +17,8 @@ class AppConstants {
   //   Emulador Android  → http://10.0.2.2:8080
   static const apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://aprendia.angeldev.fun',
+      defaultValue: 'https://aprendia.angeldev.fun',
+    // defaultValue: 'http://10.10.0.26:8000',
   );
 
   // --> Claves para almacén encriptado (datos de sesión)

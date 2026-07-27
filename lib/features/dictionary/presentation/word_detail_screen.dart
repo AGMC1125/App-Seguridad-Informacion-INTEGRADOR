@@ -274,21 +274,35 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
     return Stack(
       alignment: Alignment.center,
       children: [
+        // Fondo negro
         Container(color: Colors.black),
-        ClipRect(
-          child: Transform.scale(
-            scale: 2.2,
-            alignment: const Alignment(0, -0.4),
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: controller.value.aspectRatio,
-                child: VideoPlayer(controller),
-              ),
-            ),
+
+        // Video centrado sin zoom forzado — se ajusta sin pixelar ni cortar
+        Center(
+          child: AspectRatio(
+            aspectRatio: controller.value.aspectRatio,
+            child: VideoPlayer(controller),
           ),
         ),
+
+        // Barra de progreso inferior con posibilidad de scrubbing
         Positioned(
-          bottom: 12, right: 14,
+          bottom: 0, left: 0, right: 0,
+          child: VideoProgressIndicator(
+            controller,
+            allowScrubbing: true,
+            colors: VideoProgressColors(
+              playedColor: avatarInfo.color,
+              backgroundColor: Colors.white12,
+              bufferedColor: Colors.white24,
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+          ),
+        ),
+
+        // Botón play/pause (bottom right, encima de la barra)
+        Positioned(
+          bottom: 20, right: 14,
           child: ValueListenableBuilder(
             valueListenable: controller,
             builder: (_, value, __) {
@@ -296,14 +310,21 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
                 onTap: () => value.isPlaying ? controller.pause() : controller.play(),
                 child: Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)),
-                  child: Icon(value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      color: Colors.white, size: 22),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    value.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    color: Colors.white, size: 22,
+                  ),
                 ),
               );
             },
           ),
         ),
+
+        // Etiqueta de la palabra (top left)
         Positioned(
           top: 10, left: 14,
           child: Container(
@@ -312,8 +333,10 @@ class _WordDetailScreenState extends State<WordDetailScreen> {
               color: avatarInfo.color.withOpacity(0.85),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text(_capitalize(widget.word),
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+            child: Text(
+              _capitalize(widget.word),
+              style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+            ),
           ),
         ),
       ],
