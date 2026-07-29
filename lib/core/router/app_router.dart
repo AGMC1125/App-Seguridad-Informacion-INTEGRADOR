@@ -12,6 +12,8 @@ import '../../features/generator/presentation/screens/generator_screen.dart';
 import '../../features/history/presentation/screens/history_screen.dart';
 import '../../features/search/presentation/screens/search_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
+import '../../features/dictionary/presentation/dictionary_screen.dart';
+import '../../features/dictionary/presentation/coming_soon_screen.dart';
 import '../../features/dictionary/presentation/family_screen.dart';
 import '../../features/dictionary/presentation/word_detail_screen.dart';
 import '../../screens/security_check_screen.dart';
@@ -29,7 +31,7 @@ class RouterNotifier extends ChangeNotifier {
   RouterNotifier(Ref ref) {
     ref.listen<SessionState>(
       sessionNotifierProvider,
-      (_, __) => notifyListeners(),
+          (_, __) => notifyListeners(),
     );
   }
 }
@@ -70,9 +72,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       final isPublicRoute =
           location == RouteNames.login   ||
-          location == RouteNames.register ||
-          location == RouteNames.privacy  ||
-          location == RouteNames.terms;
+              location == RouteNames.register ||
+              location == RouteNames.privacy  ||
+              location == RouteNames.terms;
 
       // Regla 1: no autenticado, ruta protegida → login
       if (!isLoggedIn && !isPublicRoute) return RouteNames.login;
@@ -132,6 +134,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: RouteNames.profile,
             builder: (context, state) => const ProfileScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.dictionary,
+            builder: (context, state) => const DictionaryScreen(),
+            routes: [
+              // /dictionary/coming-soon — pantalla placeholder para temas sin contenido
+              GoRoute(
+                path: RouteNames.dictionaryComingSoon,
+                builder: (context, state) => ComingSoonScreen(
+                  topicLabel: state.extra as String? ?? 'Este tema',
+                ),
+              ),
+            ],
           ),
           GoRoute(
             path: RouteNames.family,

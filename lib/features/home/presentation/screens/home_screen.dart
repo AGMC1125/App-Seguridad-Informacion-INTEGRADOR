@@ -87,7 +87,7 @@ class HomeScreen extends ConsumerWidget {
                           primaryColor: const Color(0xFF059669),
                           gradientEnd: AppColors.accent,
                           badge: '12 señas',
-                          onTap: () => context.push(RouteNames.family),
+                          onTap: () => context.push(RouteNames.dictionary),
                         ),
                         const SizedBox(height: 12),
                         _buildOptionCard(
