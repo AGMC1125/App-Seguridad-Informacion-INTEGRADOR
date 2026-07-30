@@ -46,6 +46,18 @@ abstract class RouteNames {
   /// Usa [wordDetailPath] para construir la URL con el parámetro.
   static const wordDetail = 'word/:word';
 
+  /// Diccionario general LSM (lista de todos los temas).
+  static const dictionary = '/dictionary';
+
+  // ── Subruta de dictionary ──────────────────────────────────────────────
+
+  /// Pantalla "próximamente" para temas sin contenido aún.
+  /// El path completo es /dictionary/coming-soon
+  static const dictionaryComingSoon = 'coming-soon';
+
+  /// Path completo de la pantalla "próximamente".
+  static const dictionaryComingSoonPath = '/dictionary/coming-soon';
+
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   /// Construye el path completo para el detalle de una palabra.

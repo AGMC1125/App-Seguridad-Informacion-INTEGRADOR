@@ -18,10 +18,30 @@ class _FamilyScreenState extends State<FamilyScreen> {
   String _selectedAvatarCode = 'nino';
 
   static const _avatars = [
-    (id: 'nino',          icon: Icons.boy_rounded,   label: 'Niño',   color: Color(0xFF2563EB)),
-    (id: 'nina',          icon: Icons.girl_rounded,  label: 'Niña',   color: Color(0xFFDB2777)),
-    (id: 'hombre_adulto', icon: Icons.man_rounded,   label: 'Hombre', color: Color(0xFF059669)),
-    (id: 'mujer_adulta',  icon: Icons.woman_rounded, label: 'Mujer',  color: Color(0xFF7C3AED)),
+    (
+    id: 'nino',
+    image: 'assets/images/nino.png',
+    label: 'Niño',
+    color: Color(0xFF2563EB),
+    ),
+    (
+    id: 'nina',
+    image: 'assets/images/nina.png',
+    label: 'Niña',
+    color: Color(0xFFDB2777),
+    ),
+    (
+    id: 'hombre_adulto',
+    image: 'assets/images/hombre.png',
+    label: 'Hombre',
+    color: Color(0xFF059669),
+    ),
+    (
+    id: 'mujer_adulta',
+    image: 'assets/images/mujer.png',
+    label: 'Mujer',
+    color: Color(0xFF7C3AED),
+    ),
   ];
 
   static const _familyWords = [
@@ -158,7 +178,16 @@ class _FamilyScreenState extends State<FamilyScreen> {
                       ),
                       child: Column(
                         children: [
-                          Icon(a.icon, color: a.color, size: 26),
+                          SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: ClipOval(
+                              child: Image.asset(
+                                a.image,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 5),
                           Text(a.label,
                               style: TextStyle(

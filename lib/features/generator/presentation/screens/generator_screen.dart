@@ -21,14 +21,14 @@ import '../providers/generator_state.dart';
 
 class _AvatarOption {
   final String id;
-  final IconData icon;
+  final String image;
   final String label;
   final String description;
   final Color color;
 
   const _AvatarOption({
     required this.id,
-    required this.icon,
+    required this.image,
     required this.label,
     required this.description,
     required this.color,
@@ -64,28 +64,28 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
   static const List<_AvatarOption> _avatars = [
     _AvatarOption(
       id: 'nino',
-      icon: Icons.boy_rounded,
+      image: 'assets/images/nino.png',
       label: 'Niño',
       description: 'Avatar infantil masculino',
       color: Color(0xFF2563EB),
     ),
     _AvatarOption(
       id: 'nina',
-      icon: Icons.girl_rounded,
-      label: 'Niña',
+      image: 'assets/images/nina.png',
+      label: 'Avatar infantil femenino',
       description: 'Avatar infantil femenino',
       color: Color(0xFFDB2777),
     ),
     _AvatarOption(
       id: 'hombre_adulto',
-      icon: Icons.man_rounded,
+      image: 'assets/images/hombre.png',
       label: 'Hombre adulto',
       description: 'Avatar adulto masculino',
       color: Color(0xFF059669),
     ),
     _AvatarOption(
       id: 'mujer_adulta',
-      icon: Icons.woman_rounded,
+      image: 'assets/images/mujer.png',
       label: 'Mujer adulta',
       description: 'Avatar adulto femenino',
       color: Color(0xFF7C3AED),
@@ -515,22 +515,43 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
               alignment: Alignment.topRight,
               children: [
                 Container(
-                  width: 58, height: 58,
+                  width: 58,
+                  height: 58,
                   decoration: BoxDecoration(
                     color: avatar.color.withOpacity(isSelected ? 0.18 : 0.10),
                     shape: BoxShape.circle,
-                    border: isSelected ? Border.all(color: avatar.color.withOpacity(0.4), width: 2) : null,
+                    border: isSelected
+                        ? Border.all(
+                      color: avatar.color.withOpacity(0.4),
+                      width: 2,
+                    )
+                        : null,
                   ),
-                  child: Icon(avatar.icon, color: avatar.color, size: 34),
+                  child: Padding(
+                    padding: const EdgeInsets.all(6),
+                    child: ClipOval(
+                      child: Image.asset(
+                        avatar.image,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
                 ),
                 if (isSelected)
                   Container(
                     padding: const EdgeInsets.all(2.5),
                     decoration: BoxDecoration(
-                      color: avatar.color, shape: BoxShape.circle,
-                      border: const Border.fromBorderSide(BorderSide(color: Colors.white, width: 1.5)),
+                      color: avatar.color,
+                      shape: BoxShape.circle,
+                      border: const Border.fromBorderSide(
+                        BorderSide(color: Colors.white, width: 1.5),
+                      ),
                     ),
-                    child: const Icon(Icons.check, size: 11, color: Colors.white),
+                    child: const Icon(
+                      Icons.check,
+                      size: 11,
+                      color: Colors.white,
+                    ),
                   ),
               ],
             ),
@@ -923,13 +944,34 @@ class _GeneratorScreenState extends ConsumerState<GeneratorScreen> {
 
   Widget _buildVideoPlayer(_AvatarOption avatar) {
     if (_videoLoading) {
-      return Container(color: const Color(0xFF0F172A), child: const Center(child: CircularProgressIndicator(color: Colors.white54)));
+      return Container(
+        color: const Color(0xFF0F172A),
+        child: Center(
+          child: ClipOval(
+            child: Image.asset(
+              avatar.image,
+              width: 90,
+              height: 90,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+      );
     }
     final controller = _videoController;
     if (controller == null || !controller.value.isInitialized) {
       return Container(
         color: const Color(0xFF0F172A),
-        child: Center(child: Icon(avatar.icon, color: avatar.color.withOpacity(0.6), size: 72)),
+        child: Center(
+          child: ClipOval(
+            child: Image.asset(
+              avatar.image,
+              width: 90,
+              height: 90,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
       );
     }
     return Stack(

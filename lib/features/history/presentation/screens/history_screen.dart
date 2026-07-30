@@ -22,7 +22,24 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   VideoPlayerController? _videoController;
   int? _playingId;
   final ScrollController _scrollController = ScrollController();
+  Color _avatarColor(String code) {
+    switch (code) {
+      case 'nino':
+        return const Color(0xFF3B82F6); // Azul
 
+      case 'nina':
+        return const Color(0xFFEC4899); // Rosa
+
+      case 'hombre_adulto':
+        return const Color(0xFF10B981); // Verde
+
+      case 'mujer_adulta':
+        return const Color(0xFF8B5CF6); // Morado
+
+      default:
+        return AppColors.primary;
+    }
+  }
   @override
   void initState() {
     super.initState();
@@ -310,16 +327,23 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final isPlaying = _playingId == item.id;
     final hasVideo = item.mergedVideoUrl != null;
     final isDark = context.isDark;
+    final avatarColor = _avatarColor(item.avatarCode);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: context.cardColor,
+        color: Color.alphaBlend(
+          avatarColor.withOpacity(isDark ? 0.10 : 0.05),
+          context.cardColor,
+        ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.dividerColor, width: 1),
+        border: Border.all(
+          color: avatarColor.withOpacity(0.25),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(isDark ? 0.07 : 0.04),
+            color: avatarColor.withOpacity(isDark ? 0.18 : 0.10),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -337,9 +361,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           children: [
             Container(
               height: 3,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AppColors.primary, AppColors.accent],
+                  colors: [
+                    avatarColor,
+                    avatarColor.withOpacity(0.65),
+                  ],
                 ),
               ),
             ),

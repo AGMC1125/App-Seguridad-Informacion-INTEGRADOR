@@ -87,7 +87,7 @@ class HomeScreen extends ConsumerWidget {
                           primaryColor: const Color(0xFF059669),
                           gradientEnd: AppColors.accent,
                           badge: '12 señas',
-                          onTap: () => context.push(RouteNames.family),
+                          onTap: () => context.push(RouteNames.dictionary),
                         ),
                         const SizedBox(height: 12),
                         _buildOptionCard(
@@ -669,17 +669,17 @@ class HomeScreen extends ConsumerWidget {
   void _confirmLogout(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Cerrar sesión'),
         content: const Text('¿Estás seguro que deseas cerrar tu sesión?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               ref.read(sessionNotifierProvider.notifier).logout();
             },
             child: const Text(
