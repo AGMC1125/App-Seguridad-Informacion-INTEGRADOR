@@ -64,8 +64,29 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
     });
   }
 
+  // ── AQUÍ ESTÁ EL FIX ─────────────────────────────────────────────────────
   Future<void> _runSecurityCheck() async {
-    final result = await SecurityService.checkDeviceSecurity();
+    SecurityCheckResult result;
+    try {
+      result = await SecurityService
+          .checkDeviceSecurity()
+          .timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      // El chequeo (normalmente el GPS) se colgó. No dejamos al usuario
+      // atrapado en la pantalla de carga: asumimos seguro y continuamos.
+      debugPrint('⚠️ SecurityCheck: timeout — continuando sin bloquear al usuario');
+      result = const SecurityCheckResult(
+        isMockLocationActive: false,
+        isUsbDebuggingEnabled: false,
+      );
+    } catch (e) {
+      debugPrint('⚠️ SecurityCheck error: $e');
+      result = const SecurityCheckResult(
+        isMockLocationActive: false,
+        isUsbDebuggingEnabled: false,
+      );
+    }
+
     if (!mounted) return;
 
     setState(() {
@@ -84,6 +105,7 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
       });
     }
   }
+  // ── FIN DEL FIX ──────────────────────────────────────────────────────────
 
   /// Muestra un [AlertDialog] persistente y no descartable que informa al
   /// usuario del bloqueo por política de seguridad RASP.
@@ -118,11 +140,11 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
             ),
             content: const Text(
               'La Depuración USB (USB Debugging) está activa en este dispositivo.\n\n'
-              'Por políticas de seguridad de AprendIA, la aplicación no puede '
-              'ejecutarse en un entorno de depuración activo, ya que permite '
-              'el acceso no autorizado a la memoria y los datos de la aplicación.\n\n'
-              'Para continuar, desactiva la Depuración USB en:\n'
-              'Ajustes → Opciones de desarrollador → Depuración USB.',
+                  'Por políticas de seguridad de AprendIA, la aplicación no puede '
+                  'ejecutarse en un entorno de depuración activo, ya que permite '
+                  'el acceso no autorizado a la memoria y los datos de la aplicación.\n\n'
+                  'Para continuar, desactiva la Depuración USB en:\n'
+                  'Ajustes → Opciones de desarrollador → Depuración USB.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, height: 1.5),
             ),
@@ -166,7 +188,7 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
         icon: Icons.usb_off_rounded,
         title: 'Depuración USB Activa',
         message:
-            'La Depuración USB está activa en este dispositivo.\n\n'
+        'La Depuración USB está activa en este dispositivo.\n\n'
             'Por políticas de seguridad, AprendIA no puede ejecutarse '
             'en un entorno de depuración activo.\n\n'
             'Desactiva la Depuración USB en Ajustes → Opciones de desarrollador.',
@@ -178,7 +200,7 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen>
         icon: Icons.gps_off_rounded,
         title: 'Ubicación simulada detectada',
         message:
-            'Se detectó una aplicación de Fake GPS activa en este dispositivo.\n\n'
+        'Se detectó una aplicación de Fake GPS activa en este dispositivo.\n\n'
             'Por seguridad, AprendIA no puede ejecutarse mientras haya '
             'una ubicación simulada activa.\n\n'
             'Desactiva el Fake GPS e intenta de nuevo.',
@@ -292,7 +314,6 @@ class _BlockedView extends StatelessWidget {
                           ],
                         ),
                         child: Column(
-                 
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
