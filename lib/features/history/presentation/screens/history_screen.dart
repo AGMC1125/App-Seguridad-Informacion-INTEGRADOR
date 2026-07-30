@@ -21,6 +21,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   // ── UI state (no pertenece al notifier) ────────────────────────────────────
   VideoPlayerController? _videoController;
   int? _playingId;
+  final Set<int> _downloadingIds = {};
   final ScrollController _scrollController = ScrollController();
   Color _avatarColor(String code) {
     switch (code) {
@@ -160,6 +161,46 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     _videoController = null;
     if (mounted) setState(() => _playingId = null);
     await old?.dispose();
+  }
+
+  // ── Repetir video desde el inicio ───────────────────────────────────────
+  Future<void> _replayVideo() async {
+    final controller = _videoController;
+    if (controller == null) return;
+    await controller.seekTo(Duration.zero);
+    await controller.play();
+  }
+
+  // ── Descargar video al dispositivo (permanente, distinto de compartir) ───
+  Future<void> _downloadVideo(GenerationHistory item) async {
+    if (item.mergedVideoUrl == null || _downloadingIds.contains(item.id)) return;
+
+    setState(() => _downloadingIds.add(item.id));
+    try {
+      final url = ref
+          .read(historyNotifierProvider.notifier)
+          .buildVideoUrl(item.mergedVideoUrl!);
+      final response = await http.get(Uri.parse(url));
+
+      final Directory dir;
+      if (Platform.isAndroid) {
+        dir = (await getExternalStorageDirectory())!;
+      } else {
+        dir = await getApplicationDocumentsDirectory();
+      }
+      final filename = item.generatedFilename ??
+          'sena_lsm_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final file = File('${dir.path}/$filename');
+      await file.writeAsBytes(response.bodyBytes);
+
+      if (!mounted) return;
+      _showSnack('Video guardado: $filename', AppColors.success);
+    } catch (_) {
+      if (!mounted) return;
+      _showSnack('Error al descargar el video', AppColors.error);
+    } finally {
+      if (mounted) setState(() => _downloadingIds.remove(item.id));
+    }
   }
 
   String _avatarLabel(String code) {
@@ -326,6 +367,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   Widget _buildCard(BuildContext context, GenerationHistory item) {
     final isPlaying = _playingId == item.id;
     final hasVideo = item.mergedVideoUrl != null;
+    final isDownloading = _downloadingIds.contains(item.id);
     final isDark = context.isDark;
     final avatarColor = _avatarColor(item.avatarCode);
 
@@ -447,6 +489,27 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         child: VideoPlayer(_videoController!),
                       ),
                     ),
+                    // ── Botón "Repetir" ────────────────────────────────────
+                    Positioned(
+                      bottom: 10, left: 14,
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                        child: InkWell(
+                          onTap: _replayVideo,
+                          borderRadius: BorderRadius.circular(20),
+                          splashColor: Colors.white24,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Icon(Icons.replay_rounded, color: Colors.white, size: 20),
+                          ),
+                        ),
+                      ),
+                    ),
                     Positioned(
                       bottom: 10, right: 14,
                       child: Material(
@@ -499,6 +562,16 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         onTap: () => _shareVideo(item),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.download_rounded,
+                        label: 'Descargar',
+                        color: const Color(0xFFD97706),
+                        loading: isDownloading,
+                        onTap: isDownloading ? null : () => _downloadVideo(item),
+                      ),
+                    ),
                   ] else
                     Expanded(
                       child: Container(
@@ -545,15 +618,17 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
 // ---------------------------------------------------------------------------
 
 class _ActionButton extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
   final String label;
   final Color color;
-  final VoidCallback onTap;
+  final bool loading;
+  final VoidCallback? onTap;
 
   const _ActionButton({
     required this.icon,
     required this.label,
     required this.color,
+    this.loading = false,
     required this.onTap,
   });
 
@@ -570,21 +645,30 @@ class _ActionButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.10),
+            color: color.withOpacity(onTap != null ? 0.10 : 0.05),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withOpacity(0.22)),
+            border: Border.all(color: color.withOpacity(onTap != null ? 0.22 : 0.12)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: color),
+              if (loading)
+                SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                )
+              else if (icon != null)
+                Icon(icon, size: 18, color: onTap != null ? color : color.withOpacity(0.4)),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: onTap != null ? color : color.withOpacity(0.4),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
